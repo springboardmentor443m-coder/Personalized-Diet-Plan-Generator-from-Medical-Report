@@ -1,16 +1,23 @@
-"""Report service — single and multi-document processing pipeline."""
+"""Report service — single and multi-document processing pipeline.
+
+Files are processed in-memory wherever possible.  Disk is only used
+when a database audit-trail record is needed, and those temporary
+files are automatically removed once processing completes.
+"""
 
 import asyncio
+import hashlib
 import logging
 import time
 import uuid
+from pathlib import Path
 
 from config.settings import (
     INTER_DOCUMENT_DELAY_SECONDS,
     MAX_DOCUMENTS_PER_SESSION,
     UPLOAD_DIR,
 )
-from modules.pdf_to_image import convert_to_images
+from modules.pdf_to_image import convert_bytes_to_images
 from modules.ocr import run_ocr
 from modules.structured_extraction import extract_structured_data
 from modules.bmi import calculate_bmi
@@ -18,8 +25,9 @@ from modules.document_classifier import classify_document
 from modules.health_state_aggregator import aggregate_health_state
 from services import database as db
 from services.file_service import (
-    save_single_upload,
+    validate_and_hash,
     save_document_to_session,
+    cleanup_session_files,
     FileValidationError,
 )
 
@@ -32,9 +40,9 @@ class PipelineError(Exception):
         self.status_code = status_code
 
 
-def _process_document_core(file_path: str) -> dict:
-    """Run OCR → structured extraction → BMI on a saved file."""
-    images = convert_to_images(file_path)
+def _process_document_core_bytes(content: bytes, ext: str) -> dict:
+    """Run image-conversion → OCR → structured extraction → BMI entirely in memory."""
+    images = convert_bytes_to_images(content, ext)
     logger.info("Produced %d image(s)", len(images))
 
     ocr_text = run_ocr(images)
@@ -56,20 +64,19 @@ def _process_document_core(file_path: str) -> dict:
 
 
 def process_single_report(filename: str, content: bytes) -> dict:
-    """End-to-end single-file pipeline. Returns dict with session_id and extracted data."""
+    """End-to-end single-file pipeline (fully in-memory — nothing persisted to disk)."""
     pipeline_start = time.time()
 
     try:
-        upload_result = save_single_upload(filename, content)
+        ext, _hash = validate_and_hash(filename, content)
     except FileValidationError as exc:
         raise PipelineError(str(exc), status_code=400) from exc
 
-    session_id = upload_result["session_id"]
-    file_path = upload_result["file_path"]
-    logger.info("Session %s — file saved to %s", session_id, file_path)
+    session_id = str(uuid.uuid4())
+    logger.info("Session %s — processing %s in-memory", session_id, filename)
 
     try:
-        result = _process_document_core(file_path)
+        result = _process_document_core_bytes(content, ext)
     except ValueError as exc:
         raise PipelineError(str(exc), status_code=422) from exc
     except RuntimeError as exc:
@@ -124,13 +131,11 @@ async def process_multiple_reports(
             session_id, doc_id, filename or f"document_{idx + 1}",
         )
 
-        # Save
+        # Validate + hash (in-memory — no disk write yet)
         try:
-            save_result = save_document_to_session(
-                filename, content, session_id, doc_id,
-            )
+            ext, file_hash = validate_and_hash(filename, content)
         except FileValidationError as exc:
-            logger.error("Doc %d save failed: %s", idx + 1, exc)
+            logger.error("Doc %d validation failed: %s", idx + 1, exc)
             db.update_document(
                 doc_id, status="failed", error=str(exc),
             )
@@ -143,9 +148,6 @@ async def process_multiple_reports(
             })
             continue
 
-        file_path = save_result["file_path"]
-        file_hash = save_result["file_hash"]
-
         # SHA-256 de-duplication
         if file_hash in seen_hashes:
             logger.info("Skipping duplicate: %s (hash=%s…)", filename, file_hash[:12])
@@ -156,13 +158,14 @@ async def process_multiple_reports(
             continue
         seen_hashes.add(file_hash)
 
-        # Process through core pipeline
+        # Process entirely in-memory (no file saved to disk)
         try:
-            result = await asyncio.to_thread(_process_document_core, file_path)
+            result = await asyncio.to_thread(
+                _process_document_core_bytes, content, ext,
+            )
             result["status"] = "processed"
             result["doc_id"] = doc_id
-            result["file_path"] = file_path
-            result["original_filename"] = save_result["original_filename"]
+            result["original_filename"] = filename
             result["user_declared_type"] = user_type
 
             # Classify
@@ -185,7 +188,7 @@ async def process_multiple_reports(
             db.save_document_result(doc_id, result)
 
             logger.info(
-                "Doc %d/%d processed (%s, type=%s, %.1fs)",
+                "Doc %d/%d processed in-memory (%s, type=%s, %.1fs)",
                 idx + 1, len(files), filename, doc_type,
                 time.time() - doc_start,
             )

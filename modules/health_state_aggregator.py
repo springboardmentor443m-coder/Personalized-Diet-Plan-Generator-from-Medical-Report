@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import re
 from datetime import datetime
 
@@ -67,15 +66,6 @@ def _resolve_document_date(
     dt = _parse_datetime(patient_info.get("collection_datetime"))
     if dt:
         return dt, "medium"
-
-    # 3. file modification date
-    file_path = doc_result.get("file_path")
-    if file_path and os.path.exists(file_path):
-        try:
-            mtime = os.path.getmtime(file_path)
-            return datetime.fromtimestamp(mtime), "low"
-        except OSError:
-            pass
 
     return None, "unknown"
 

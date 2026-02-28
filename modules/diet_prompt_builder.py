@@ -42,6 +42,19 @@ CRITICAL RULES:
    underweight patients (BMI < 18.5) regardless of other lab values.
 10. When trends show IMPROVEMENT, note specifically that the current dietary
     approach may be working and suggest maintaining rather than intensifying.
+
+SPECIFICITY RULES (MANDATORY):
+11. Every meal MUST list SPECIFIC, real food items — never generic labels
+    like "low carb breakfast" or "light meal" or "healthy snack".
+    WRONG: "Low carb dinner"
+    RIGHT: "Grilled chicken breast (150g), steamed broccoli (1 cup),
+            quinoa (1/2 cup), olive oil drizzle (1 tsp)"
+12. Include realistic portion sizes in grams, cups, or pieces for EVERY
+    food item.
+13. Use common, widely available foods. Prefer whole foods over processed.
+14. Vary protein sources across the week (poultry, fish, legumes, eggs,
+    lean meat, tofu) unless a condition restricts specific sources.
+15. Each meal must be a COMPLETE, cookable meal — not a nutrient category.
 """
 
 DIET_USER_PROMPT_TEMPLATE = """\
@@ -159,18 +172,57 @@ Return a JSON object with this exact structure:
 
   "weekly_meal_plan": {{
     "day_1": {{
-      "breakfast": {{ "meal": string, "calories_approx": number, "notes": string }},
-      "mid_morning_snack": {{ "meal": string, "calories_approx": number, "notes": string }},
-      "lunch": {{ "meal": string, "calories_approx": number, "notes": string }},
-      "evening_snack": {{ "meal": string, "calories_approx": number, "notes": string }},
-      "dinner": {{ "meal": string, "calories_approx": number, "notes": string }}
+      "breakfast": {{
+        "items": [
+          {{ "food": string, "portion": string, "preparation": string | null }}
+        ],
+        "calories_approx": number,
+        "protein_g": number,
+        "carbs_g": number,
+        "fat_g": number,
+        "clinical_note": string | null
+      }},
+      "mid_morning_snack": {{
+        "items": [
+          {{ "food": string, "portion": string, "preparation": string | null }}
+        ],
+        "calories_approx": number,
+        "clinical_note": string | null
+      }},
+      "lunch": {{
+        "items": [
+          {{ "food": string, "portion": string, "preparation": string | null }}
+        ],
+        "calories_approx": number,
+        "protein_g": number,
+        "carbs_g": number,
+        "fat_g": number,
+        "clinical_note": string | null
+      }},
+      "evening_snack": {{
+        "items": [
+          {{ "food": string, "portion": string, "preparation": string | null }}
+        ],
+        "calories_approx": number,
+        "clinical_note": string | null
+      }},
+      "dinner": {{
+        "items": [
+          {{ "food": string, "portion": string, "preparation": string | null }}
+        ],
+        "calories_approx": number,
+        "protein_g": number,
+        "carbs_g": number,
+        "fat_g": number,
+        "clinical_note": string | null
+      }}
     }},
-    "day_2": {{ "..." : "same structure" }},
-    "day_3": {{ "..." : "same structure" }},
-    "day_4": {{ "..." : "same structure" }},
-    "day_5": {{ "..." : "same structure" }},
-    "day_6": {{ "..." : "same structure" }},
-    "day_7": {{ "..." : "same structure" }}
+    "day_2": {{ "..." : "same structure as day_1" }},
+    "day_3": {{ "..." : "same structure as day_1" }},
+    "day_4": {{ "..." : "same structure as day_1" }},
+    "day_5": {{ "..." : "same structure as day_1" }},
+    "day_6": {{ "..." : "same structure as day_1" }},
+    "day_7": {{ "..." : "same structure as day_1" }}
   }},
 
   "monitoring_recommendations": [

@@ -61,12 +61,32 @@ def _validate_diet_plan_structure(plan: dict) -> list[str]:
     if "confidence_assessment" not in plan:
         warnings.append("Missing 'confidence_assessment' section")
 
-    # Check meal plan completeness
+    # Check meal plan completeness and food-item specificity
     meal_plan = plan.get("weekly_meal_plan", {})
+    _MEAL_SLOTS = ("breakfast", "mid_morning_snack", "lunch", "evening_snack", "dinner")
+
     for day_num in range(1, 8):
         day_key = f"day_{day_num}"
         if day_key not in meal_plan:
             warnings.append(f"Missing {day_key} in weekly_meal_plan")
+            continue
+
+        day = meal_plan[day_key]
+        for slot in _MEAL_SLOTS:
+            meal = day.get(slot)
+            if not meal:
+                continue
+
+            # Accept both old format ("meal" key) and new format ("items" list)
+            items = meal.get("items")
+            if items is None and "meal" not in meal:
+                warnings.append(
+                    f"{day_key}.{slot}: missing both 'items' and 'meal' fields"
+                )
+            elif items is not None and (not isinstance(items, list) or len(items) == 0):
+                warnings.append(
+                    f"{day_key}.{slot}: 'items' is empty — expected specific foods"
+                )
 
     return warnings
 
