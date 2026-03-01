@@ -174,6 +174,10 @@ def _render_diet_plan(diet_plan: dict, safety: dict | None):
         al = active_prefs.get("allergies", [])
         if al:
             pref_badges.append(f"🚫 {', '.join(al)}")
+        bl = active_prefs.get("budget_level", "")
+        if bl:
+            bl_icons = {"budget_friendly": "🪙", "moderate": "💵", "premium": "💎"}
+            pref_badges.append(f"{bl_icons.get(bl, '💰')} {bl.replace('_', ' ').title()}")
         if pref_badges:
             st.info("**Preferences applied:** " + " · ".join(pref_badges))
 
@@ -364,9 +368,116 @@ def _render_diet_plan(diet_plan: dict, safety: dict | None):
                     if rec:
                         st.caption(f"→ {rec}")
 
-    # ── Weekly Meal Plan ──────────────────────────────────────
+    # ── Inline Diet Preferences + Reload ─────────────────────
     st.subheader("🍽️ Your Personalized Meal Plan")
 
+    with st.expander("🎛️ Update Diet Preferences & Reload", expanded=False):
+        fp_col1, fp_col2 = st.columns(2)
+        with fp_col1:
+            inline_diet_type = st.selectbox(
+                "Diet Type",
+                options=["non_veg", "veg", "vegan", "eggetarian"],
+                format_func=lambda x: {
+                    "non_veg": "🍗 Non-Vegetarian",
+                    "veg": "🥬 Vegetarian",
+                    "vegan": "🌱 Vegan",
+                    "eggetarian": "🥚 Eggetarian",
+                }.get(x, x),
+                index=["non_veg", "veg", "vegan", "eggetarian"].index(
+                    st.session_state.get("dietary_preferences", {}).get("diet_type", "non_veg")
+                ),
+                key="_inline_diet_type",
+            )
+            inline_meal_freq = st.selectbox(
+                "Meal Frequency",
+                options=["5_small", "3_meals", "2_meals"],
+                format_func=lambda x: {
+                    "5_small": "5 small meals/day",
+                    "3_meals": "3 meals/day",
+                    "2_meals": "2 meals/day",
+                }.get(x, x),
+                index=["5_small", "3_meals", "2_meals"].index(
+                    st.session_state.get("dietary_preferences", {}).get("meal_frequency", "5_small")
+                ),
+                key="_inline_meal_freq",
+            )
+        with fp_col2:
+            inline_cuisine = st.selectbox(
+                "Regional Cuisine",
+                options=[
+                    "", "North Indian", "South Indian", "Mediterranean",
+                    "East Asian", "Middle Eastern", "Continental/Western",
+                    "Latin American",
+                ],
+                format_func=lambda x: x if x else "No preference",
+                index=(
+                    ["", "North Indian", "South Indian", "Mediterranean",
+                     "East Asian", "Middle Eastern", "Continental/Western",
+                     "Latin American"].index(
+                        st.session_state.get("dietary_preferences", {}).get("cuisine", "")
+                    ) if st.session_state.get("dietary_preferences", {}).get("cuisine", "") in
+                    ["", "North Indian", "South Indian", "Mediterranean",
+                     "East Asian", "Middle Eastern", "Continental/Western",
+                     "Latin American"] else 0
+                ),
+                key="_inline_cuisine",
+            )
+            inline_calories = st.number_input(
+                "Calorie Target (kcal/day) — 0 = auto",
+                min_value=0, max_value=5000,
+                value=st.session_state.get("dietary_preferences", {}).get("calorie_target", 0),
+                step=100,
+                key="_inline_calories",
+            )
+        fp_col3, fp_col4 = st.columns(2)
+        with fp_col3:
+            inline_allergies = st.text_input(
+                "Allergies / Exclusions (comma-separated)",
+                value=", ".join(st.session_state.get("dietary_preferences", {}).get("allergies", [])),
+                placeholder="e.g. peanuts, shellfish, gluten",
+                key="_inline_allergies",
+            )
+        with fp_col4:
+            inline_budget = st.selectbox(
+                "Budget Level",
+                options=["no_preference", "budget_friendly", "moderate", "premium"],
+                format_func=lambda x: {
+                    "no_preference": "💰 No Preference",
+                    "budget_friendly": "🪙 Budget-Friendly",
+                    "moderate": "💵 Moderate",
+                    "premium": "💎 Premium",
+                }.get(x, x),
+                index=["no_preference", "budget_friendly", "moderate", "premium"].index(
+                    st.session_state.get("dietary_preferences", {}).get("budget_level", "no_preference")
+                ),
+                key="_inline_budget",
+            )
+
+        if st.button("🔄 Reload Diet Plan", type="primary", use_container_width=True,
+                      key="_inline_reload"):
+            # Save updated preferences to session state
+            new_prefs: dict = {
+                "diet_type": inline_diet_type,
+                "meal_frequency": inline_meal_freq,
+            }
+            if inline_cuisine:
+                new_prefs["cuisine"] = inline_cuisine
+            if inline_calories and inline_calories > 0:
+                new_prefs["calorie_target"] = inline_calories
+            if inline_allergies and inline_allergies.strip():
+                new_prefs["allergies"] = [
+                    a.strip() for a in inline_allergies.split(",") if a.strip()
+                ]
+            if inline_budget and inline_budget != "no_preference":
+                new_prefs["budget_level"] = inline_budget
+            st.session_state.dietary_preferences = new_prefs
+            # Reset diet and regenerate
+            st.session_state.diet_done = False
+            st.session_state.diet_data = None
+            st.session_state._inline_reload_pending = True
+            st.rerun()
+
+    # ── Weekly Meal Plan ──────────────────────────────────────
     weekly = diet_plan.get("weekly_meal_plan", {})
     meals = diet_plan.get("meals") or diet_plan.get("meal_plan", [])
 
@@ -493,10 +604,10 @@ def _render_single_meal(meal: dict, icons: dict):
     legacy_meal = meal.get("meal")
 
     header = f"{icon} **{name_display}**"
+    if timing:
+        header += f" · ({timing})"
     if cals:
         header += f" · ~{cals} kcal"
-    if timing:
-        header += f" · ⏰ {timing}"
 
     # Show per-meal macros if available
     macros_parts = []
@@ -684,6 +795,19 @@ def main():
                 key="_pref_allergies",
             )
 
+            pref_budget = st.selectbox(
+                "Budget Level",
+                options=["no_preference", "budget_friendly", "moderate", "premium"],
+                format_func=lambda x: {
+                    "no_preference": "💰 No Preference",
+                    "budget_friendly": "🪙 Budget-Friendly",
+                    "moderate": "💵 Moderate",
+                    "premium": "💎 Premium",
+                }.get(x, x),
+                index=0,
+                key="_pref_budget",
+            )
+
             if st.button("💾 Save Preferences", key="_save_prefs", type="primary"):
                 prefs: dict = {
                     "diet_type": pref_diet_type,
@@ -697,6 +821,8 @@ def main():
                     prefs["allergies"] = [
                         a.strip() for a in pref_allergies.split(",") if a.strip()
                     ]
+                if pref_budget and pref_budget != "no_preference":
+                    prefs["budget_level"] = pref_budget
                 st.session_state.dietary_preferences = prefs
                 st.success("Preferences saved!")
 
@@ -1034,7 +1160,11 @@ def main():
     # ═══════════════════════════════════════════════════════════
     elif active_tab == "🥗 Diet Plan":
         if not st.session_state.diet_done:
-            if st.session_state.analysis_done:
+            # Auto-regenerate if triggered by inline reload
+            if st.session_state.get("_inline_reload_pending"):
+                st.session_state._inline_reload_pending = False
+                _run_diet_generation()
+            elif st.session_state.analysis_done:
                 st.markdown(
                     "<div style='text-align:center; padding:2em 0;'>"
                     "<h3>🥗 Ready to Generate</h3>"

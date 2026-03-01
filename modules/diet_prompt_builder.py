@@ -177,50 +177,7 @@ Return a JSON object with this exact structure:
 
   "weekly_meal_plan": {{
     "day_1": {{
-      "breakfast": {{
-        "items": [
-          {{ "food": string, "portion": string, "preparation": string | null }}
-        ],
-        "calories_approx": number,
-        "protein_g": number,
-        "carbs_g": number,
-        "fat_g": number,
-        "clinical_note": string | null
-      }},
-      "mid_morning_snack": {{
-        "items": [
-          {{ "food": string, "portion": string, "preparation": string | null }}
-        ],
-        "calories_approx": number,
-        "clinical_note": string | null
-      }},
-      "lunch": {{
-        "items": [
-          {{ "food": string, "portion": string, "preparation": string | null }}
-        ],
-        "calories_approx": number,
-        "protein_g": number,
-        "carbs_g": number,
-        "fat_g": number,
-        "clinical_note": string | null
-      }},
-      "evening_snack": {{
-        "items": [
-          {{ "food": string, "portion": string, "preparation": string | null }}
-        ],
-        "calories_approx": number,
-        "clinical_note": string | null
-      }},
-      "dinner": {{
-        "items": [
-          {{ "food": string, "portion": string, "preparation": string | null }}
-        ],
-        "calories_approx": number,
-        "protein_g": number,
-        "carbs_g": number,
-        "fat_g": number,
-        "clinical_note": string | null
-      }}
+{meal_slots_schema}
     }},
     "day_2": {{ "..." : "same structure as day_1" }},
     "day_3": {{ "..." : "same structure as day_1" }},
@@ -229,6 +186,10 @@ Return a JSON object with this exact structure:
     "day_6": {{ "..." : "same structure as day_1" }},
     "day_7": {{ "..." : "same structure as day_1" }}
   }},
+
+  ⚠ CRITICAL: Each day MUST contain EXACTLY the meal slots shown above
+  for day_1 — no more, no fewer. This matches the user's meal frequency
+  preference. Do NOT add extra meals or snacks beyond what is listed.
 
   "monitoring_recommendations": [
     {{
@@ -504,10 +465,90 @@ def _format_dietary_preferences(preferences: dict | None) -> str:
         lines.append(f"  Allergy exclusions: {allergy_str}")
         lines.append("  ⚠ These are absolute exclusions — NEVER include these foods.")
 
+    budget = preferences.get("budget_level")
+    if budget:
+        budget_map = {
+            "budget_friendly": (
+                "Budget-Friendly — Use ONLY affordable, locally available staples. "
+                "Avoid expensive items like avocado, broccoli, quinoa, salmon, berries, "
+                "chia seeds, almond butter, exotic nuts, imported cheese. "
+                "Prefer: seasonal local vegetables, lentils/dal, rice, wheat, "
+                "eggs, local fish, curd/buttermilk, bananas, papaya, "
+                "groundnuts, jaggery, local millets."
+            ),
+            "moderate": (
+                "Moderate budget — Mix of affordable staples and some premium items. "
+                "Include common supermarket foods but avoid luxury imports."
+            ),
+            "premium": (
+                "Premium — No budget restrictions. Include nutrient-dense superfoods, "
+                "organic options, and specialty items as appropriate."
+            ),
+        }
+        lines.append(f"  Budget level: {budget_map.get(budget, budget)}")
+        if budget == "budget_friendly":
+            lines.append("  ⚠ This is a HARD constraint — every food item must be affordable and commonly available.")
+
     if not lines:
         return "No dietary preferences specified — use general balanced recommendations."
 
     return "\n".join(lines)
+
+
+def _build_meal_slots_schema(meal_frequency: str) -> str:
+    """Return the JSON schema fragment for meal slots matching the user's frequency.
+
+    This ensures the LLM sees ONLY the correct number of meal keys in the
+    schema, preventing it from adding extra meals or ignoring the preference.
+    """
+
+    MAIN_MEAL = (
+        '        "time": string,\n'
+        '        "items": [\n'
+        '          {{ "food": string, "portion": string, "preparation": string | null }}\n'
+        '        ],\n'
+        '        "calories_approx": number,\n'
+        '        "protein_g": number,\n'
+        '        "carbs_g": number,\n'
+        '        "fat_g": number,\n'
+        '        "clinical_note": string | null'
+    )
+
+    SNACK_MEAL = (
+        '        "time": string,\n'
+        '        "items": [\n'
+        '          {{ "food": string, "portion": string, "preparation": string | null }}\n'
+        '        ],\n'
+        '        "calories_approx": number,\n'
+        '        "clinical_note": string | null'
+    )
+
+    slots_by_freq = {
+        "2_meals": [
+            ("brunch", MAIN_MEAL),
+            ("dinner", MAIN_MEAL),
+        ],
+        "3_meals": [
+            ("breakfast", MAIN_MEAL),
+            ("lunch", MAIN_MEAL),
+            ("dinner", MAIN_MEAL),
+        ],
+        "5_small": [
+            ("breakfast", MAIN_MEAL),
+            ("mid_morning_snack", SNACK_MEAL),
+            ("lunch", MAIN_MEAL),
+            ("evening_snack", SNACK_MEAL),
+            ("dinner", MAIN_MEAL),
+        ],
+    }
+
+    slots = slots_by_freq.get(meal_frequency, slots_by_freq["5_small"])
+
+    parts = []
+    for name, schema in slots:
+        parts.append(f'      "{name}": {{\n{schema}\n      }}')
+
+    return ",\n".join(parts)
 
 
 def build_diet_prompt(
@@ -558,6 +599,9 @@ def build_diet_prompt(
     meal_freq = prefs.get("meal_frequency", "5_small")
     meal_plan_duration = "7-day"
 
+    # Build dynamic meal slots schema based on meal frequency
+    meal_slots_schema = _build_meal_slots_schema(meal_freq)
+
     user_prompt = DIET_USER_PROMPT_TEMPLATE.format(
         meal_plan_duration=meal_plan_duration,
         patient_profile=patient_profile,
@@ -568,6 +612,7 @@ def build_diet_prompt(
         diagnoses=diagnoses,
         conflicts=conflicts,
         dietary_preferences=dietary_prefs_text,
+        meal_slots_schema=meal_slots_schema,
     )
 
     logger.info(
