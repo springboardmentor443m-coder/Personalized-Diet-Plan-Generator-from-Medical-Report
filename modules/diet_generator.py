@@ -94,13 +94,14 @@ def _validate_diet_plan_structure(plan: dict) -> list[str]:
 def generate_diet_plan(
     aggregated_state: dict,
     per_doc_results: list[dict] | None = None,
+    dietary_preferences: dict | None = None,
 ) -> dict:
     """Generate a diet plan from aggregated health data and safety checks."""
     if not GROQ_API_KEY:
         raise ValueError("GROQ_API_KEY is not configured.")
 
     system_prompt, user_prompt = build_diet_prompt(
-        aggregated_state, per_doc_results,
+        aggregated_state, per_doc_results, dietary_preferences,
     )
 
     client = Groq(api_key=GROQ_API_KEY)

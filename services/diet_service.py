@@ -13,8 +13,16 @@ logger = logging.getLogger(__name__)
 def generate_diet_from_results(
     aggregation_result: dict[str, Any],
     successful_docs: list[dict[str, Any]] | None = None,
+    dietary_preferences: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Generate a personalised diet plan from aggregated analysis results."""
+    """Generate a personalised diet plan from aggregated analysis results.
+
+    Parameters
+    ----------
+    dietary_preferences : dict | None
+        User-specified diet filters (diet_type, meal_frequency, cuisine,
+        calorie_target, allergies).  Passed straight into the prompt.
+    """
     if successful_docs is None:
         successful_docs = aggregation_result.get(
             "_successful_docs",
@@ -52,7 +60,9 @@ def generate_diet_from_results(
 
     # Generate diet plan
     try:
-        gen_result = generate_diet_plan(aggregated_state, per_doc_results)
+        gen_result = generate_diet_plan(
+            aggregated_state, per_doc_results, dietary_preferences,
+        )
         diet_plan = gen_result["diet_plan"]
         gen_metadata = gen_result["generation_metadata"]
         structural_warnings = gen_result.get("structural_warnings", [])

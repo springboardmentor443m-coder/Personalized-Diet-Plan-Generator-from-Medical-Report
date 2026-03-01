@@ -59,7 +59,7 @@ SPECIFICITY RULES (MANDATORY):
 
 DIET_USER_PROMPT_TEMPLATE = """\
 Based on the complete clinical profile below, generate a personalized
-7-day diet plan with meal-by-meal recommendations.
+{meal_plan_duration} diet plan with meal-by-meal recommendations.
 
 ═══════════════════════════════════════
 PATIENT PROFILE
@@ -95,6 +95,11 @@ DIAGNOSES
 UNRESOLVED DATA CONFLICTS
 ═══════════════════════════════════════
 {conflicts}
+
+═══════════════════════════════════════
+DIETARY PREFERENCES & CONSTRAINTS (user-specified)
+═══════════════════════════════════════
+{dietary_preferences}
 
 ═══════════════════════════════════════
 RESPONSE FORMAT (STRICT JSON)
@@ -451,12 +456,78 @@ def _format_conflicts(conflicts: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _format_dietary_preferences(preferences: dict | None) -> str:
+    """Format user-specified dietary preferences for the prompt.
+
+    These are *hard constraints* — the LLM must honour them unless
+    they directly conflict with a medical-safety requirement, in
+    which case the conflict must be explicitly flagged.
+    """
+    if not preferences:
+        return "No dietary preferences specified — use general balanced recommendations."
+
+    lines: list[str] = []
+
+    diet_type = preferences.get("diet_type")
+    if diet_type:
+        label_map = {
+            "veg": "Vegetarian (no meat, no fish, no eggs — dairy allowed)",
+            "non_veg": "Non-vegetarian (all food groups allowed)",
+            "vegan": "Vegan (no animal products at all — no dairy, eggs, honey)",
+            "eggetarian": "Eggetarian (vegetarian + eggs allowed, no meat/fish)",
+        }
+        lines.append(f"  Diet type: {label_map.get(diet_type, diet_type)}")
+        lines.append("  ⚠ This is a HARD constraint — do NOT include excluded foods.")
+
+    meal_freq = preferences.get("meal_frequency")
+    if meal_freq:
+        freq_map = {
+            "2_meals": "2 main meals per day (brunch + dinner)",
+            "3_meals": "3 main meals per day (breakfast, lunch, dinner)",
+            "5_small": "5 small meals per day (breakfast, mid-morning snack, lunch, evening snack, dinner)",
+        }
+        lines.append(f"  Meal frequency: {freq_map.get(meal_freq, meal_freq)}")
+
+    cuisine = preferences.get("cuisine")
+    if cuisine:
+        lines.append(f"  Regional cuisine preference: {cuisine}")
+        lines.append("  Use foods and recipes common in this cuisine tradition.")
+
+    calorie_target = preferences.get("calorie_target")
+    if calorie_target:
+        lines.append(f"  User-requested calorie target: ~{calorie_target} kcal/day")
+        lines.append("  ⚠ Override this target ONLY if it violates medical safety floors.")
+
+    allergies = preferences.get("allergies")
+    if allergies:
+        allergy_str = ", ".join(allergies) if isinstance(allergies, list) else str(allergies)
+        lines.append(f"  Allergy exclusions: {allergy_str}")
+        lines.append("  ⚠ These are absolute exclusions — NEVER include these foods.")
+
+    if not lines:
+        return "No dietary preferences specified — use general balanced recommendations."
+
+    return "\n".join(lines)
+
+
 def build_diet_prompt(
     aggregated_state: dict,
     per_doc_results: list[dict] | None = None,
+    dietary_preferences: dict | None = None,
 ) -> tuple[str, str]:
-    """Build the system and user prompt pair for diet plan generation."""
+    """Build the system and user prompt pair for diet plan generation.
+
+    Parameters
+    ----------
+    aggregated_state : dict
+        Merged health data from all processed documents.
+    per_doc_results : list[dict] | None
+        Per-document extraction results (prescriptions, diagnoses, etc.).
+    dietary_preferences : dict | None
+        User-specified preferences (diet type, cuisine, allergies, etc.).
+    """
     per_doc = per_doc_results or []
+    prefs = dietary_preferences or {}
 
     patient_profile = _format_patient_profile(
         aggregated_state.get("patient_information", {}),
@@ -481,7 +552,14 @@ def build_diet_prompt(
         aggregated_state.get("conflicts", []),
     )
 
+    dietary_prefs_text = _format_dietary_preferences(prefs)
+
+    # Determine meal plan duration from preferences
+    meal_freq = prefs.get("meal_frequency", "5_small")
+    meal_plan_duration = "7-day"
+
     user_prompt = DIET_USER_PROMPT_TEMPLATE.format(
+        meal_plan_duration=meal_plan_duration,
         patient_profile=patient_profile,
         lab_results=lab_results,
         abnormal_findings=abnormal_findings,
@@ -489,11 +567,13 @@ def build_diet_prompt(
         medications=medications,
         diagnoses=diagnoses,
         conflicts=conflicts,
+        dietary_preferences=dietary_prefs_text,
     )
 
     logger.info(
-        "Diet prompt built: %d chars system, %d chars user",
+        "Diet prompt built: %d chars system, %d chars user (prefs: %s)",
         len(DIET_SYSTEM_PROMPT), len(user_prompt),
+        list(prefs.keys()) if prefs else "none",
     )
 
     return DIET_SYSTEM_PROMPT, user_prompt

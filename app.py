@@ -1,6 +1,7 @@
 """Streamlit frontend for the AI Diet Plan Generator."""
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 
@@ -148,50 +149,197 @@ def _render_bmi(bmi_data):
 
 
 def _render_diet_plan(diet_plan: dict, safety: dict | None):
-    """Render the full diet plan."""
+    """Render the full diet plan with all subsections."""
     if not diet_plan:
         st.error("No diet plan was generated.")
         return
 
+    # ── Active preferences badge ──────────────────────────────
+    active_prefs = st.session_state.get("dietary_preferences", {})
+    if active_prefs:
+        pref_badges = []
+        dt = active_prefs.get("diet_type", "")
+        dt_icons = {"veg": "🥬", "non_veg": "🍗", "vegan": "🌱", "eggetarian": "🥚"}
+        if dt:
+            pref_badges.append(f"{dt_icons.get(dt, '🍽️')} {dt.replace('_', '-').title()}")
+        mf = active_prefs.get("meal_frequency", "")
+        if mf:
+            pref_badges.append(f"🕐 {mf.replace('_', ' ')}")
+        cu = active_prefs.get("cuisine", "")
+        if cu:
+            pref_badges.append(f"🌍 {cu}")
+        ct = active_prefs.get("calorie_target")
+        if ct:
+            pref_badges.append(f"🔥 {ct} kcal")
+        al = active_prefs.get("allergies", [])
+        if al:
+            pref_badges.append(f"🚫 {', '.join(al)}")
+        if pref_badges:
+            st.info("**Preferences applied:** " + " · ".join(pref_badges))
+
+    # ── Clinical Reasoning ────────────────────────────────────
     reasoning = diet_plan.get("clinical_reasoning")
-    if reasoning:
+    if reasoning and isinstance(reasoning, dict):
         with st.expander("🧠 Clinical Reasoning", expanded=False):
-            if isinstance(reasoning, dict):
-                for key, val in reasoning.items():
-                    st.markdown(f"**{_format_test_name(key)}**")
-                    if isinstance(val, list):
-                        for item in val:
-                            st.markdown(f"- {item}")
-                    else:
-                        st.write(val)
-            elif isinstance(reasoning, str):
-                st.write(reasoning)
+            # Primary concerns — render as severity-tagged cards
+            concerns = reasoning.get("primary_concerns", [])
+            if concerns and isinstance(concerns, list):
+                st.markdown("**Primary Concerns**")
+                for c in concerns:
+                    if not isinstance(c, dict):
+                        st.markdown(f"- {c}")
+                        continue
+                    sev = c.get("severity", "")
+                    trend = c.get("trend", "")
+                    concern = c.get("concern", "")
+                    implication = c.get("dietary_implication", "")
+                    labs = c.get("driving_lab_values", [])
 
-    targets = (
-        diet_plan.get("daily_nutrition_targets")
-        or diet_plan.get("nutrition_summary")
-        or diet_plan.get("daily_targets")
-        or diet_plan.get("dietary_guidelines", {}).get("daily_nutrition_targets")
-        or {}
-    )
+                    sev_icon = {"mild": "🟡", "moderate": "🟠", "severe": "🔴", "critical": "🚨"}.get(sev, "⚪")
+                    trend_icon = {"improving": "📈", "worsening": "📉", "stable": "➡️"}.get(trend, "")
 
-    if targets:
-        st.subheader("📊 Daily Nutrition Targets")
-        items = [
-            ("Calories", targets.get("calories") or targets.get("total_calories"), "kcal"),
-            ("Protein", targets.get("protein") or targets.get("protein_g"), "g"),
-            ("Carbs", targets.get("carbohydrates") or targets.get("carbs") or targets.get("carbohydrates_g"), "g"),
-            ("Fat", targets.get("fat") or targets.get("fat_g") or targets.get("fats"), "g"),
-            ("Fiber", targets.get("fiber") or targets.get("fiber_g"), "g"),
-            ("Sodium", targets.get("sodium") or targets.get("sodium_mg"), "mg"),
-        ]
-        visible = [(l, v, u) for l, v, u in items if v is not None]
-        if visible:
-            cols = st.columns(len(visible))
-            for idx, (label, val, unit) in enumerate(visible):
-                with cols[idx]:
-                    st.metric(label=f"{label} ({unit})", value=str(val))
+                    line = f"{sev_icon} **{concern}** — {sev}"
+                    if trend:
+                        line += f" {trend_icon} {trend}"
+                    if labs:
+                        line += f" | Labs: {', '.join(labs)}"
+                    st.markdown(line)
+                    if implication:
+                        st.caption(f"→ {implication}")
 
+            # Comorbidity interactions
+            interactions = reasoning.get("comorbidity_interactions", [])
+            if interactions and isinstance(interactions, list):
+                st.markdown("**Comorbidity Interactions**")
+                for i in interactions:
+                    if not isinstance(i, dict):
+                        st.markdown(f"- {i}")
+                        continue
+                    conditions = i.get("conditions", [])
+                    conflict = i.get("conflict_type", "")
+                    resolution = i.get("resolution", "")
+                    conf = i.get("confidence", "")
+                    cond_str = " ↔ ".join(conditions) if isinstance(conditions, list) else str(conditions)
+                    st.warning(f"**{cond_str}** — {conflict}")
+                    if resolution:
+                        st.caption(f"Resolution: {resolution} (confidence: {conf})")
+
+            # Medication-diet interactions
+            med_interactions = reasoning.get("medication_diet_interactions", [])
+            if med_interactions and isinstance(med_interactions, list):
+                st.markdown("**Medication–Diet Interactions**")
+                for m in med_interactions:
+                    if not isinstance(m, dict):
+                        st.markdown(f"- {m}")
+                        continue
+                    med = m.get("medication", "")
+                    consideration = m.get("dietary_consideration", "")
+                    action = m.get("action", "")
+                    st.info(f"💊 **{med}**: {consideration}")
+                    if action:
+                        st.caption(f"Action: {action}")
+
+    elif reasoning and isinstance(reasoning, str):
+        with st.expander("🧠 Clinical Reasoning", expanded=False):
+            st.write(reasoning)
+
+    # ── Dietary Guidelines ────────────────────────────────────
+    guidelines = diet_plan.get("dietary_guidelines", {})
+    if guidelines and isinstance(guidelines, dict):
+        st.subheader("📊 Dietary Guidelines")
+
+        # Caloric target + Macronutrient split — side by side
+        caloric = guidelines.get("caloric_target", {})
+        macro = guidelines.get("macronutrient_split", {})
+
+        if caloric or macro:
+            gc1, gc2 = st.columns(2)
+            with gc1:
+                if caloric and isinstance(caloric, dict):
+                    range_kcal = caloric.get("range_kcal", "—")
+                    rationale = caloric.get("rationale", "")
+                    st.metric(label="🔥 Daily Calorie Target", value=str(range_kcal) + " kcal")
+                    if rationale:
+                        st.caption(rationale)
+            with gc2:
+                if macro and isinstance(macro, dict):
+                    p = macro.get("protein_percent", "?")
+                    c = macro.get("carbs_percent", "?")
+                    f = macro.get("fat_percent", "?")
+                    st.markdown(f"**Macronutrient Split**")
+                    mc1, mc2, mc3 = st.columns(3)
+                    with mc1:
+                        st.metric("Protein", f"{p}%")
+                    with mc2:
+                        st.metric("Carbs", f"{c}%")
+                    with mc3:
+                        st.metric("Fat", f"{f}%")
+                    rationale = macro.get("rationale", "")
+                    if rationale:
+                        st.caption(rationale)
+
+        # Key nutrients to increase
+        nutrients_up = guidelines.get("key_nutrients_to_increase", [])
+        if nutrients_up and isinstance(nutrients_up, list):
+            with st.expander("✅ Key Nutrients to Increase", expanded=False):
+                for n in nutrients_up:
+                    if isinstance(n, dict):
+                        nutrient = n.get("nutrient", "")
+                        reason = n.get("reason", "")
+                        sources = n.get("food_sources", [])
+                        st.success(f"**{nutrient}**: {reason}")
+                        if sources:
+                            st.caption(f"Sources: {', '.join(sources)}")
+                    elif isinstance(n, str):
+                        st.success(f"• {n}")
+
+        # Key nutrients to limit
+        nutrients_down = guidelines.get("key_nutrients_to_limit", [])
+        if nutrients_down and isinstance(nutrients_down, list):
+            with st.expander("⚠️ Key Nutrients to Limit", expanded=False):
+                for n in nutrients_down:
+                    if isinstance(n, dict):
+                        nutrient = n.get("nutrient", "")
+                        reason = n.get("reason", "")
+                        max_daily = n.get("max_daily", "")
+                        msg = f"**{nutrient}**: {reason}"
+                        if max_daily:
+                            msg += f" (max: {max_daily})"
+                        st.warning(msg)
+                    elif isinstance(n, str):
+                        st.warning(f"• {n}")
+
+        # Foods to avoid
+        foods_avoid = guidelines.get("foods_to_avoid", [])
+        if foods_avoid and isinstance(foods_avoid, list):
+            with st.expander("🚫 Foods to Avoid", expanded=False):
+                for f in foods_avoid:
+                    if isinstance(f, dict):
+                        food = f.get("food_or_category") or f.get("food") or f.get("name", "")
+                        reason = f.get("reason", "")
+                        severity = f.get("severity", "")
+                        sev_icon = {"avoid_completely": "🔴", "limit_significantly": "🟠", "moderate": "🟡"}.get(severity, "⚠️")
+                        st.error(f"{sev_icon} **{food}** — {reason}" + (f" [{severity.replace('_', ' ')}]" if severity else ""))
+                    elif isinstance(f, str):
+                        st.error(f"• {f}")
+
+        # Foods to emphasize
+        foods_emph = guidelines.get("foods_to_emphasize", [])
+        if foods_emph and isinstance(foods_emph, list):
+            with st.expander("💚 Foods to Emphasize", expanded=False):
+                for f in foods_emph:
+                    if isinstance(f, dict):
+                        food = f.get("food_or_category") or f.get("food") or f.get("name", "")
+                        reason = f.get("reason", "")
+                        freq = f.get("frequency", "")
+                        msg = f"**{food}**: {reason}"
+                        if freq:
+                            msg += f" — {freq}"
+                        st.success(msg)
+                    elif isinstance(f, str):
+                        st.success(f"• {f}")
+
+    # ── Safety Assessment ─────────────────────────────────────
     if safety:
         st.subheader("🛡️ Safety Assessment")
         is_safe = safety.get("safe", True)
@@ -201,33 +349,39 @@ def _render_diet_plan(diet_plan: dict, safety: dict | None):
             st.error("⚠️ Safety concerns detected — review warnings below.")
 
         warnings_list = safety.get("warnings", [])
-        for w in warnings_list:
-            w_type = w.get("type") or w.get("severity", "info") if isinstance(w, dict) else "info"
-            msg = w.get("message") or w.get("description") or str(w) if isinstance(w, dict) else str(w)
-            if "critical" in str(w_type).lower() or w_type == "error":
-                st.error(f"🚨 {msg}")
-            elif "warn" in str(w_type).lower() or w_type == "caution":
-                st.warning(f"⚠️ {msg}")
-            else:
-                st.info(f"ℹ️ {msg}")
+        if warnings_list:
+            with st.expander(f"Safety Warnings ({len(warnings_list)})", expanded=not is_safe):
+                for w in warnings_list:
+                    w_sev = w.get("severity", "info") if isinstance(w, dict) else "info"
+                    msg = w.get("message") or w.get("description") or str(w) if isinstance(w, dict) else str(w)
+                    rec = w.get("recommendation", "") if isinstance(w, dict) else ""
+                    if "critical" in str(w_sev).lower():
+                        st.error(f"🚨 {msg}")
+                    elif "high" in str(w_sev).lower():
+                        st.warning(f"⚠️ {msg}")
+                    else:
+                        st.info(f"ℹ️ {msg}")
+                    if rec:
+                        st.caption(f"→ {rec}")
 
+    # ── Weekly Meal Plan ──────────────────────────────────────
     st.subheader("🍽️ Your Personalized Meal Plan")
 
-    # Try weekly meal plan first, then daily
     weekly = diet_plan.get("weekly_meal_plan", {})
     meals = diet_plan.get("meals") or diet_plan.get("meal_plan", [])
 
     meal_icons = {
-        "breakfast": "🌅", "mid-morning snack": "🍎", "morning snack": "🍎",
+        "breakfast": "🌅", "mid-morning snack": "🍎", "mid morning snack": "🍎",
+        "morning snack": "🍎", "mid_morning_snack": "🍎",
         "lunch": "☀️", "afternoon snack": "🥜", "evening snack": "🥜",
-        "snack": "🥜", "dinner": "🌙", "bedtime snack": "🌜",
+        "evening_snack": "🥜", "snack": "🥜",
+        "dinner": "🌙", "bedtime snack": "🌜",
     }
 
     if weekly and isinstance(weekly, dict):
-        # Weekly plan — show tabs per day
         days = list(weekly.keys())
         if days:
-            tabs = st.tabs([d.title() if isinstance(d, str) else str(d) for d in days])
+            tabs = st.tabs([d.replace("_", " ").title() if isinstance(d, str) else str(d) for d in days])
             for tab, day in zip(tabs, days):
                 with tab:
                     day_data = weekly[day]
@@ -235,7 +389,6 @@ def _render_diet_plan(diet_plan: dict, safety: dict | None):
                     if isinstance(day_data, dict):
                         day_meals = day_data.get("meals", [])
                         if not day_meals:
-                            # Maybe the day_data itself is meals keyed by name
                             day_meals = [
                                 {"meal_name": k, **(v if isinstance(v, dict) else {"items": [v]})}
                                 for k, v in day_data.items()
@@ -248,74 +401,70 @@ def _render_diet_plan(diet_plan: dict, safety: dict | None):
                         _render_single_meal(meal, meal_icons)
 
                     totals = day_data.get("daily_totals") if isinstance(day_data, dict) else None
-                    if totals:
-                        st.caption(f"Day total: ~{totals.get('calories', '?')} kcal")
+                    if totals and isinstance(totals, dict):
+                        parts = []
+                        for key in ["calories", "protein_g", "carbs_g", "fat_g"]:
+                            v = totals.get(key)
+                            if v is not None:
+                                parts.append(f"{key.replace('_g','').title()}: {v}")
+                        if parts:
+                            st.caption(f"📊 Day totals: {' · '.join(parts)}")
 
     elif isinstance(meals, list) and meals:
         for meal in meals:
             _render_single_meal(meal, meal_icons)
-
     elif isinstance(meals, dict) and meals:
         for name, meal in meals.items():
             meal_data = meal if isinstance(meal, dict) else {"items": [meal]}
             meal_data["meal_name"] = name
             _render_single_meal(meal_data, meal_icons)
     else:
-        # Fallback: show raw plan
         st.json(diet_plan)
 
-    guidelines = diet_plan.get("dietary_guidelines", {})
-    if isinstance(guidelines, dict):
-        _render_guidelines_section(guidelines, "foods_to_increase", "✅ Foods to Increase", st.success)
-        _render_guidelines_section(guidelines, "foods_to_limit", "⚠️ Foods to Limit", st.warning)
-        _render_guidelines_section(guidelines, "foods_to_avoid", "🚫 Foods to Avoid", st.error)
+    # ── Monitoring Recommendations ────────────────────────────
+    monitoring = diet_plan.get("monitoring_recommendations", [])
+    if monitoring and isinstance(monitoring, list):
+        st.subheader("📋 Monitoring Recommendations")
+        import pandas as pd
+        rows = []
+        for m in monitoring:
+            if isinstance(m, dict):
+                rows.append({
+                    "Test": m.get("test", "—"),
+                    "Current Status": m.get("current_status", "—"),
+                    "Recheck In": m.get("recheck_in", "—"),
+                    "Dietary Goal": m.get("dietary_goal", "—"),
+                })
+            elif isinstance(m, str):
+                rows.append({"Test": m, "Current Status": "—", "Recheck In": "—", "Dietary Goal": "—"})
+        if rows:
+            st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
 
-        special = guidelines.get("special_instructions") or guidelines.get("special_considerations")
-        if special:
-            st.subheader("📋 Special Instructions")
-            if isinstance(special, list):
-                for s in special:
-                    st.info(f"• {s}" if isinstance(s, str) else f"• {s}")
-            elif isinstance(special, str):
-                st.info(special)
-
-    recs = (
-        diet_plan.get("recommendations")
-        or diet_plan.get("dietary_recommendations")
-        or diet_plan.get("general_recommendations")
-        or diet_plan.get("guidelines")
-    )
-    if recs:
-        st.subheader("💡 General Recommendations")
-        if isinstance(recs, list):
-            for r in recs:
-                txt = r if isinstance(r, str) else (r.get("recommendation") or r.get("description", str(r)))
-                st.markdown(f"- {txt}")
-        elif isinstance(recs, dict):
-            for k, v in recs.items():
-                st.markdown(f"**{_format_test_name(k)}**: {v if isinstance(v, str) else ', '.join(v) if isinstance(v, list) else v}")
-        elif isinstance(recs, str):
-            st.write(recs)
-
-    avoid = diet_plan.get("foods_to_avoid") or diet_plan.get("avoid") or diet_plan.get("restrictions")
-    if avoid and not guidelines.get("foods_to_avoid"):
-        st.subheader("🚫 Foods to Avoid or Limit")
-        if isinstance(avoid, list):
-            for a in avoid:
-                txt = a if isinstance(a, str) else (a.get("food") or a.get("item", str(a)))
-                st.markdown(f"- {txt}")
-        elif isinstance(avoid, str):
-            st.write(avoid)
-
+    # ── Confidence Assessment ─────────────────────────────────
     confidence = diet_plan.get("confidence_assessment")
-    if confidence:
+    if confidence and isinstance(confidence, dict):
         with st.expander("📊 Confidence Assessment", expanded=False):
-            if isinstance(confidence, dict):
-                for k, v in confidence.items():
-                    st.markdown(f"**{_format_test_name(k)}**: {v}")
-            else:
-                st.write(confidence)
+            overall = confidence.get("overall_confidence", "")
+            if overall:
+                conf_icon = {"high": "🟢", "moderate": "🟡", "low": "🔴"}.get(overall, "⚪")
+                st.markdown(f"**Overall Confidence:** {conf_icon} {overall.title()}")
 
+            notes = confidence.get("data_quality_notes", [])
+            if notes and isinstance(notes, list):
+                st.markdown("**Data Quality Notes:**")
+                for n in notes:
+                    st.markdown(f"- {n}")
+
+            limitations = confidence.get("limitations", [])
+            if limitations and isinstance(limitations, list):
+                st.markdown("**Limitations:**")
+                for l in limitations:
+                    st.caption(f"⚠ {l}")
+    elif confidence:
+        with st.expander("📊 Confidence Assessment", expanded=False):
+            st.write(confidence)
+
+    # ── Disclaimer ────────────────────────────────────────────
     st.divider()
     disclaimer = diet_plan.get("disclaimer", "")
     st.warning(
@@ -329,52 +478,56 @@ def _render_diet_plan(diet_plan: dict, safety: dict | None):
 
 
 def _render_single_meal(meal: dict, icons: dict):
-    """Render one meal block."""
-    name = meal.get("meal_name") or meal.get("name") or meal.get("meal", "Meal")
-    icon = icons.get(name.lower(), "🍽️")
+    """Render one meal block — supports both old ('meal' string) and new ('items' list) format."""
+    name = meal.get("meal_name") or meal.get("name") or meal.get("meal_type") or meal.get("meal", "Meal")
+    # Normalise underscore names for icon lookup
+    name_display = name.replace("_", " ").title()
+    icon = icons.get(name.lower().replace("_", " "), "🍽️")
     timing = meal.get("time") or meal.get("timing", "")
-    cals = meal.get("calories") or meal.get("estimated_calories", "")
-    items = meal.get("items") or meal.get("foods") or meal.get("food_items", [])
-    notes = meal.get("notes", "")
+    cals = meal.get("calories_approx") or meal.get("calories") or meal.get("estimated_calories", "")
+    notes = meal.get("notes") or meal.get("clinical_note", "")
 
-    header = f"{icon} **{name}**"
+    # New structured items list
+    items = meal.get("items") or meal.get("foods") or meal.get("food_items", [])
+    # Legacy single-string meal field
+    legacy_meal = meal.get("meal")
+
+    header = f"{icon} **{name_display}**"
     if cals:
         header += f" · ~{cals} kcal"
     if timing:
         header += f" · ⏰ {timing}"
 
+    # Show per-meal macros if available
+    macros_parts = []
+    for macro_key, label in [("protein_g", "P"), ("carbs_g", "C"), ("fat_g", "F")]:
+        val = meal.get(macro_key)
+        if val is not None:
+            macros_parts.append(f"{label}: {val}g")
+    if macros_parts:
+        header += f" · ({' | '.join(macros_parts)})"
+
     with st.container():
         st.markdown(header)
-        if isinstance(items, list):
+        if isinstance(items, list) and items:
             for item in items:
                 if isinstance(item, str):
                     st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {item}")
                 elif isinstance(item, dict):
-                    food = item.get("name") or item.get("food") or str(item)
-                    qty = item.get("quantity") or item.get("portion") or item.get("amount", "")
-                    st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {food}" + (f" — {qty}" if qty else ""))
+                    food = item.get("food") or item.get("name") or str(item)
+                    portion = item.get("portion") or item.get("quantity") or item.get("amount", "")
+                    prep = item.get("preparation", "")
+                    line = f"&nbsp;&nbsp;&nbsp;&nbsp;• **{food}**"
+                    if portion:
+                        line += f" — {portion}"
+                    if prep:
+                        line += f" *({prep})*"
+                    st.markdown(line)
+        elif isinstance(legacy_meal, str) and legacy_meal:
+            st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;• {legacy_meal}")
         if notes:
             st.caption(f"💡 {notes}")
         st.markdown("---")
-
-
-def _render_guidelines_section(guidelines: dict, key: str, title: str, display_fn):
-    """Render a foods_to_increase / foods_to_limit / foods_to_avoid section."""
-    data = guidelines.get(key)
-    if not data:
-        return
-    st.subheader(title)
-    if isinstance(data, list):
-        for item in data:
-            if isinstance(item, str):
-                display_fn(f"• {item}")
-            elif isinstance(item, dict):
-                food = item.get("food") or item.get("name") or item.get("category", "")
-                reason = item.get("reason") or item.get("rationale", "")
-                display_fn(f"**{food}**" + (f": {reason}" if reason else ""))
-    elif isinstance(data, dict):
-        for cat, items in data.items():
-            display_fn(f"**{_format_test_name(cat)}**: {', '.join(items) if isinstance(items, list) else items}")
 
 
 #  Main App
@@ -393,6 +546,8 @@ def main():
         st.session_state.manual_height = None
     if "manual_weight" not in st.session_state:
         st.session_state.manual_weight = None
+    if "dietary_preferences" not in st.session_state:
+        st.session_state.dietary_preferences = {}
 
     with st.sidebar:
         st.image("https://img.icons8.com/color/96/heart-health.png", width=64)
@@ -477,7 +632,95 @@ def main():
                 st.caption(f"✅ Saved BMI: **{saved}**")
 
         st.divider()
-        st.caption("v0.3.0 · Powered by Groq AI")
+        st.markdown("##### 🥗 Diet Preferences")
+
+        with st.expander("🎛️ Customize Diet Plan", expanded=False):
+            pref_diet_type = st.selectbox(
+                "Diet Type",
+                options=["non_veg", "veg", "vegan", "eggetarian"],
+                format_func=lambda x: {
+                    "non_veg": "🍗 Non-Vegetarian",
+                    "veg": "🥬 Vegetarian",
+                    "vegan": "🌱 Vegan",
+                    "eggetarian": "🥚 Eggetarian",
+                }.get(x, x),
+                index=0,
+                key="_pref_diet_type",
+            )
+
+            pref_meal_freq = st.selectbox(
+                "Meal Frequency",
+                options=["5_small", "3_meals", "2_meals"],
+                format_func=lambda x: {
+                    "5_small": "5 small meals/day",
+                    "3_meals": "3 meals/day",
+                    "2_meals": "2 meals/day",
+                }.get(x, x),
+                index=0,
+                key="_pref_meal_freq",
+            )
+
+            pref_cuisine = st.selectbox(
+                "Regional Cuisine",
+                options=[
+                    "", "North Indian", "South Indian", "Mediterranean",
+                    "East Asian", "Middle Eastern", "Continental/Western",
+                    "Latin American",
+                ],
+                format_func=lambda x: x if x else "No preference",
+                index=0,
+                key="_pref_cuisine",
+            )
+
+            pref_calories = st.number_input(
+                "Calorie Target (kcal/day) — 0 = auto",
+                min_value=0, max_value=5000, value=0, step=100,
+                key="_pref_calories",
+            )
+
+            pref_allergies = st.text_input(
+                "Allergies / Exclusions (comma-separated)",
+                placeholder="e.g. peanuts, shellfish, gluten",
+                key="_pref_allergies",
+            )
+
+            if st.button("💾 Save Preferences", key="_save_prefs", type="primary"):
+                prefs: dict = {
+                    "diet_type": pref_diet_type,
+                    "meal_frequency": pref_meal_freq,
+                }
+                if pref_cuisine:
+                    prefs["cuisine"] = pref_cuisine
+                if pref_calories and pref_calories > 0:
+                    prefs["calorie_target"] = pref_calories
+                if pref_allergies and pref_allergies.strip():
+                    prefs["allergies"] = [
+                        a.strip() for a in pref_allergies.split(",") if a.strip()
+                    ]
+                st.session_state.dietary_preferences = prefs
+                st.success("Preferences saved!")
+
+            # Show current prefs
+            current_prefs = st.session_state.dietary_preferences
+            if current_prefs:
+                parts = []
+                dt = current_prefs.get("diet_type", "")
+                if dt:
+                    parts.append(dt.replace("_", "-").title())
+                mf = current_prefs.get("meal_frequency", "")
+                if mf:
+                    parts.append(mf.replace("_", " "))
+                cu = current_prefs.get("cuisine", "")
+                if cu:
+                    parts.append(cu)
+                al = current_prefs.get("allergies", [])
+                if al:
+                    parts.append(f"avoid: {', '.join(al)}")
+                if parts:
+                    st.caption(f"✅ {' · '.join(parts)}")
+
+        st.divider()
+        st.caption("v0.4.0 · Powered by Groq AI")
 
     st.markdown(
         "<h1 style='text-align:center; margin-bottom:0;'>🏥 AI-Powered Diet Plan Generator</h1>"
@@ -486,6 +729,31 @@ def main():
         "</p>",
         unsafe_allow_html=True,
     )
+
+    # ── Workflow progress stepper ─────────────────────────────
+    step_done = [False, False, False]
+    step_done[0] = True  # upload always available
+    step_done[1] = st.session_state.analysis_done
+    step_done[2] = st.session_state.diet_done
+
+    step_labels = ["📄 Upload", "🧪 Analyze", "🥗 Diet Plan"]
+    step_cols = st.columns(3)
+    for i, col in enumerate(step_cols):
+        with col:
+            if step_done[i]:
+                color, icon = "#22c55e", "✅"
+            elif i == 1 and not step_done[1]:
+                color, icon = "#94a3b8", "⏳"
+            elif i == 2 and not step_done[2]:
+                color, icon = "#94a3b8", "⏳"
+            else:
+                color, icon = "#94a3b8", "⏳"
+            st.markdown(
+                f"<div style='text-align:center; padding:6px 0;'>"
+                f"<span style='font-size:1.1em; color:{color}; font-weight:600;'>"
+                f"{icon} {step_labels[i]}</span></div>",
+                unsafe_allow_html=True,
+            )
     st.divider()
 
     TAB_OPTIONS = ["📄 Upload Reports", "🧪 Lab Results", "🥗 Diet Plan"]
@@ -639,6 +907,7 @@ def main():
                 st.session_state.diet_data = None
                 st.session_state.manual_height = None
                 st.session_state.manual_weight = None
+                st.session_state.dietary_preferences = {}
                 st.session_state.active_tab = "📄 Upload Reports"
                 st.rerun()
 
@@ -647,7 +916,14 @@ def main():
     # ═══════════════════════════════════════════════════════════
     elif active_tab == "🧪 Lab Results":
         if not st.session_state.analysis_done:
-            st.info("👈 Upload and analyze your reports first to see results here.")
+            st.markdown(
+                "<div style='text-align:center; padding:3em 0;'>"
+                "<h3 style='color:#94a3b8;'>🧪 No Lab Results Yet</h3>"
+                "<p style='color:#94a3b8;'>Upload your medical reports in the <b>Upload Reports</b> tab "
+                "and click <b>Analyze</b> to extract lab data.</p>"
+                "</div>",
+                unsafe_allow_html=True,
+            )
         else:
             data = st.session_state.results
             is_multi = data.get("documents_processed") is not None
@@ -759,9 +1035,27 @@ def main():
     elif active_tab == "🥗 Diet Plan":
         if not st.session_state.diet_done:
             if st.session_state.analysis_done:
-                st.info("Click **Generate Diet Plan** in the Lab Results tab to create your diet plan.")
+                st.markdown(
+                    "<div style='text-align:center; padding:2em 0;'>"
+                    "<h3>🥗 Ready to Generate</h3>"
+                    "<p style='color:#64748b;'>Your reports have been analyzed. "
+                    "Generate a personalized diet plan based on your lab results.</p>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+                c1, c2, c3 = st.columns([1, 2, 1])
+                with c2:
+                    if st.button("🥗 Generate Diet Plan Now", type="primary", use_container_width=True):
+                        _run_diet_generation()
             else:
-                st.info("👈 Upload and analyze your reports first, then generate a diet plan.")
+                st.markdown(
+                    "<div style='text-align:center; padding:3em 0;'>"
+                    "<h3 style='color:#94a3b8;'>📄 Upload Reports First</h3>"
+                    "<p style='color:#94a3b8;'>Go to the <b>Upload Reports</b> tab to upload your medical "
+                    "documents, then analyze them to unlock diet plan generation.</p>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
         else:
             diet_data = st.session_state.diet_data
             diet_plan = diet_data.get("diet_plan")
@@ -773,6 +1067,78 @@ def main():
                 st.error(f"Could not generate diet plan: {reason}")
             else:
                 _render_diet_plan(diet_plan, safety)
+
+                # ── Action buttons: Regenerate & Download ─────────
+                st.divider()
+                btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 1])
+
+                with btn_col1:
+                    if st.button("🔄 Regenerate Diet Plan", type="secondary", use_container_width=True,
+                                 help="Re-generate with current preferences"):
+                        st.session_state.diet_done = False
+                        st.session_state.diet_data = None
+                        _run_diet_generation()
+
+                with btn_col2:
+                    diet_json = json.dumps(diet_data, indent=2, ensure_ascii=False, default=str)
+                    st.download_button(
+                        label="📥 Download Diet Plan (JSON)",
+                        data=diet_json,
+                        file_name="diet_plan.json",
+                        mime="application/json",
+                        use_container_width=True,
+                    )
+
+                with btn_col3:
+                    # Markdown export
+                    md_lines = ["# 🥗 Personalized Diet Plan\n"]
+                    guidelines = diet_plan.get("dietary_guidelines", {})
+                    caloric = guidelines.get("caloric_target", {})
+                    if caloric:
+                        md_lines.append(f"**Calorie Target:** {caloric.get('range_kcal', '—')} kcal\n")
+                    macro = guidelines.get("macronutrient_split", {})
+                    if macro:
+                        md_lines.append(
+                            f"**Macros:** Protein {macro.get('protein_percent', '?')}% | "
+                            f"Carbs {macro.get('carbs_percent', '?')}% | "
+                            f"Fat {macro.get('fat_percent', '?')}%\n"
+                        )
+                    weekly = diet_plan.get("weekly_meal_plan", {})
+                    if weekly:
+                        for day, day_data in weekly.items():
+                            md_lines.append(f"\n## {day.replace('_', ' ').title()}\n")
+                            day_meals = []
+                            if isinstance(day_data, dict):
+                                day_meals = day_data.get("meals", [])
+                                if not day_meals:
+                                    day_meals = [
+                                        {"meal_name": k, **(v if isinstance(v, dict) else {})}
+                                        for k, v in day_data.items() if k != "daily_totals"
+                                    ]
+                            elif isinstance(day_data, list):
+                                day_meals = day_data
+                            for meal in day_meals:
+                                mname = meal.get("meal_name") or meal.get("name", "Meal")
+                                md_lines.append(f"\n### {mname.replace('_',' ').title()}\n")
+                                items = meal.get("items", [])
+                                for item in items:
+                                    if isinstance(item, dict):
+                                        food = item.get("food", "")
+                                        portion = item.get("portion", "")
+                                        md_lines.append(f"- {food} — {portion}")
+                                    elif isinstance(item, str):
+                                        md_lines.append(f"- {item}")
+                    disclaimer = diet_plan.get("disclaimer", "")
+                    if disclaimer:
+                        md_lines.append(f"\n---\n⚠️ *{disclaimer}*\n")
+                    md_text = "\n".join(md_lines)
+                    st.download_button(
+                        label="📝 Download as Markdown",
+                        data=md_text,
+                        file_name="diet_plan.md",
+                        mime="text/markdown",
+                        use_container_width=True,
+                    )
 
                 meta = diet_data.get("diet_generation_metadata", {})
                 if meta:
@@ -885,12 +1251,24 @@ def _run_diet_generation():
     progress = st.progress(0, text="Preparing clinical context...")
     status = st.empty()
 
+    # Collect dietary preferences from session state
+    dietary_prefs = st.session_state.get("dietary_preferences", {}) or {}
+
     try:
-        status.markdown("🥗 **Generating personalized diet plan** (this may take 30-60 seconds)...")
+        pref_summary = ""
+        if dietary_prefs:
+            parts = [dietary_prefs.get("diet_type", ""), dietary_prefs.get("cuisine", "")]
+            pref_summary = " (" + ", ".join(p for p in parts if p) + ")"
+        status.markdown(
+            f"🥗 **Generating personalized diet plan{pref_summary}** "
+            "(this may take 30-60 seconds)..."
+        )
         progress.progress(0.3, text="AI generating diet plan...")
 
-        # Call the shared diet service
-        diet_output = generate_diet_from_results(results, successful_docs)
+        # Call the shared diet service with preferences
+        diet_output = generate_diet_from_results(
+            results, successful_docs, dietary_prefs,
+        )
 
         progress.progress(1.0, text="Diet plan ready!")
 
