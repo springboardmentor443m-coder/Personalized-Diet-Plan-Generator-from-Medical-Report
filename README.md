@@ -213,18 +213,3 @@ Install all with:
 pip install -r requirements.txt
 ```
 
-## 🔐 Security Notes
-
-- Never commit your `.env` file to version control
-- Add `.env` to your `.gitignore`
-- Regenerate your Groq API key if accidentally exposed
-- For production deployment use a WSGI server like Gunicorn
-
----
-
-## 🚧 Known Limitations
-
-- Tesseract OCR requires admin-free installation path on Windows
-- Image quality affects OCR accuracy — use clear, high-resolution scans
-- LLM responses may vary slightly between runs
-- Currently supports English lab reports only
