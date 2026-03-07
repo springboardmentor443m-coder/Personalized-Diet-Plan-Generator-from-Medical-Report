@@ -82,21 +82,22 @@ Open browser at: **http://127.0.0.1:5000**
 ##🚀 **Features**
 
 ###📂 **Input**
-.Upload medical reports in PDF, Image (PNG/JPG), or TXT format
-.Select Vegetarian / Non-Vegetarian / Vegan / Keto diet preference
-.Enter Height, Weight, Age, Gender for BMI calculation
-.Optionally specify food allergies / intolerances
+-Upload medical reports in PDF, Image (PNG/JPG), or TXT format
+-Select Vegetarian / Non-Vegetarian / Vegan / Keto diet preference
+-Enter Height, Weight, Age, Gender for BMI calculation
+-Optionally specify food allergies / intolerances
 
 ###🤖 **AI/ML Processing**
-.Automatic OCR text extraction using Tesseract + pdfplumber
-.ML-based health risk classification (Random Forest/XGBoost)
-.NLP interpretation of doctor notes using transformer models
-.Structured data extraction via Groq LLaMA 3.3 70B
-.Personalized diet plan generation based on lab results + preferences + ML insights
+-Automatic OCR text extraction using Tesseract + pdfplumber
+-ML-based health risk classification (Random Forest/XGBoost)
+-NLP interpretation of doctor notes using transformer models
+-Structured data extraction via Groq LLaMA 3.3 70B
+-Personalized diet plan generation based on lab results + preferences + ML insights
 
 ###📊**Output Tabs**
 
 |Tab|Contents|
+|----|-------|
 |🥗 Diet Plan	Nutrient targets | 7-day meal plan table with medication timing|
 |📈 Health Analytics	BMI gauge | risk level + abnormal findings + category summary|
 |🩺 Medical Insights	Extracted health metrics | doctor notes | detected conditions|
