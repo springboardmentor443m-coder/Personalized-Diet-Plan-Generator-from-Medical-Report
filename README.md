@@ -1,7 +1,7 @@
 An intelligent healthcare system that extracts information from medical lab reports and generates personalized 7-day diet plans using AI/ML — built with Flask, Groq LLaMA, Tesseract OCR, and a professional HTML/CSS frontend.
 
-📁**Project Structure**
-
+##📁**Project Structure**
+```
 AI-NutriCare/
 ├── templates/
 │   └── dashboard.html         # Professional Flask HTML/CSS/JS frontend
@@ -24,64 +24,77 @@ AI-NutriCare/
 ├── .env                          # API keys (not committed to git)
 ├── requirements.txt              # Python dependencies
 └── README.md                     # Project documentation
+```
 
-⚙️**Setup Instructions**
 
-1.**Create Project Folder**
+---
 
+##⚙️**Setup Instructions**
+
+###1.**Create Project Folder**
+```bash
 mkdir AI-NutriCare
 cd AI-NutriCare
-
-2.**Create Virtual Environment**
-
+```
+###2.**Create Virtual Environment**
+```bash
 python -m venv venv
 venv\Scripts\activate        # Windows
 source venv/bin/activate     # Mac/Linux
+```
 
-3.**Install Dependencies**
-   
+###3.**Install Dependencies**
+```bash   
 pip install -r requirements.txt
-
-4.**Install Tesseract OCR**
+```
+###4.**Install Tesseract OCR**
 
 Download from: https://github.com/UB-Mannheim/tesseract/wiki
 Install to your user folder (avoid Program Files):
-
+```
 C:\Users\<yourname>\Tesseract-OCR\
+```
 Update path in src/extraction/report_parser.py:
-
+```python
 pytesseract.pytesseract.tesseract_cmd = r"C:\Users\<yourname>\Tesseract-OCR\tesseract.exe"
+```
 
-5.**Configure API Key**
+###5.**Configure API Key**
 Create a .env file in the project root:
+```
 GROQ_API_KEY=your_groq_api_key_here
+```
+Get your free API key at: https://console.groq.com
 
-Get your free API key at: 
-https://console.groq.com
-
-6.**Train ML Model (Optional)**
+###6.**Train ML Model (Optional)**
+```bash
 python src/ml_analysis/train_model.py
+```
 
-7.**Run the Application**
+###7.**Run the Application**
+```bash
 python app.py
-Open browser at: http://127.0.0.1:5000
+```
+Open browser at: **http://127.0.0.1:5000**
 
-🚀 **Features**
+---
 
-📂 **Input**
+##🚀 **Features**
+
+###📂 **Input**
 .Upload medical reports in PDF, Image (PNG/JPG), or TXT format
 .Select Vegetarian / Non-Vegetarian / Vegan / Keto diet preference
 .Enter Height, Weight, Age, Gender for BMI calculation
 .Optionally specify food allergies / intolerances
 
-🤖 **AI/ML Processing**
+###🤖 **AI/ML Processing**
 .Automatic OCR text extraction using Tesseract + pdfplumber
 .ML-based health risk classification (Random Forest/XGBoost)
 .NLP interpretation of doctor notes using transformer models
 .Structured data extraction via Groq LLaMA 3.3 70B
 .Personalized diet plan generation based on lab results + preferences + ML insights
 
-📊**Output Tabs**
+###📊**Output Tabs**
 
 |Tab|Contents|
 |🥗 Diet Plan	Nutrient targets | 7-day meal plan table with medication timing|
@@ -89,8 +102,9 @@ Open browser at: http://127.0.0.1:5000
 |🩺 Medical Insights	Extracted health metrics | doctor notes | detected conditions|
 |💊 Recommendations	Supplements | dietary guidelines | Indian brand suggestions|
 |💧 Wellness Plan	Daily hydration plan | weekly detox | exercise tips|
-
+---
 🗺️ **System Architecture**
+```
 USER BROWSER
      │
      ▼
@@ -135,8 +149,11 @@ MATPLOTLIB
      │
      ▼
 FLASK → dashboard.html → USER BROWSER
+```
 
-🔗 **Connections Used**
+---
+
+##🔗 **Connections Used**
 |Connection|Type|Details|
 |----------|----|-------|
 |User ↔ Flask|HTTP|localhost:5000|
@@ -149,7 +166,9 @@ FLASK → dashboard.html → USER BROWSER
 |Flask → Matplotlib|Internal Python|Chart generation|
 |Flask → Browser|HTTP|Serves HTML + static charts|
 
-🧠 **AI/ML Models**
+---
+
+##🧠 **AI/ML Models**
 |Task|Model|Provider|Temperature|Max Tokens|
 |----|-----|--------|-----------|----------|
 |Lab Report Extraction|LLaMA 3.3 70B Versatile|Groq|0|8000|
@@ -157,7 +176,9 @@ FLASK → dashboard.html → USER BROWSER
 |Doctor Notes Interpretation|BART/GPT	Hugging Face|0.2|1000|
 |Diet Plan Generation|LLaMA 3.3 70B Versatile|Groq|0.3|8000|
 
-📊**Health Risk Categories**
+---
+
+##📊**Health Risk Categories**
 
 |Risk Level|Description|Action Required|
 |----------|-----------|---------------|
@@ -165,7 +186,9 @@ FLASK → dashboard.html → USER BROWSER
 |Moderate Risk|	1-2 abnormal values|Targeted dietary changes|
 |High Risk|	Multiple abnormal values|	Immediate dietary intervention + doctor follow-up|
 
-**BMI Categories**
+---
+
+##**BMI Categories**
 
 |BMI|Range|Category|Action|
 |---|-----|--------|------|
@@ -174,7 +197,9 @@ FLASK → dashboard.html → USER BROWSER
 |25 – 29.9|Overweight|Reduce carbs, increase fiber|
 |≥ 30|Obese|Low-calorie, high-fiber diet|
 
-**Health Metrics Thresholds**
+---
+
+##**Health Metrics Thresholds**
 
 |Metric|Normal|Borderline|High Risk|
 |------|------|----------|----------|
@@ -184,7 +209,9 @@ FLASK → dashboard.html → USER BROWSER
 |LDL|< 100 mg/dL|130-159 mg/dL|≥ 160 mg/dL|
 |Triglycerides|< 150 mg/dL|150-199 mg/dL|≥ 200 mg/dL|
 
-📈 **Charts Generated**
+---
+
+##📈 **Charts Generated**
 
 |Chart|Source|Data|Description|
 |-----|------|----|-----------|
@@ -194,7 +221,9 @@ FLASK → dashboard.html → USER BROWSER
 |Category Summary|Tests by category|Normal vs Abnormal grouped bars|
 |Health Metrics Radar|Multiple metrics|Comparative analysis of all parameters|
 
-🛠️**Tech Stack**
+---
+
+##🛠️**Tech Stack**
 
 |Layer|Technology|
 |-----|----------|
@@ -208,8 +237,10 @@ FLASK → dashboard.html → USER BROWSER
 |PDF Export|ReportLab|
 |Environment|python-dotenv|
 
-📦 **Dependencies**
+---
 
+##📦 **Dependencies**
+```
 flask
 groq
 python-dotenv
@@ -227,7 +258,8 @@ matplotlib
 numpy
 reportlab
 joblib
-
+```
 Install all with:
-
+```bash
 pip install -r requirements.txt
+```
