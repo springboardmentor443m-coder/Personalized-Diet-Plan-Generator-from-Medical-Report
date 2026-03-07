@@ -138,6 +138,7 @@ FLASK → dashboard.html → USER BROWSER
 
 🔗 **Connections Used**
 |Connection|Type|Details|
+|----------|----|-------|
 |User ↔ Flask|HTTP|localhost:5000|
 |Flask → Extractor|Internal Python|Function call|
 |Extractor → Groq|HTTPS REST API|LLM Call 1 — OCR extraction|
@@ -149,14 +150,17 @@ FLASK → dashboard.html → USER BROWSER
 |Flask → Browser|HTTP|Serves HTML + static charts|
 
 🧠 **AI/ML Models**
-|Task|Model|Provider|Temperature|	Max Tokens|
+|Task|Model|Provider|Temperature|Max Tokens|
+|----|-----|--------|-----------|----------|
 |Lab Report Extraction|LLaMA 3.3 70B Versatile|Groq|0|8000|
 |Health Risk Classification|Random Forest/XGBoost	scikit-learn|N/A|N/A|
 |Doctor Notes Interpretation|BART/GPT	Hugging Face|0.2|1000|
 |Diet Plan Generation|LLaMA 3.3 70B Versatile|Groq|0.3|8000|
 
 📊**Health Risk Categories**
+
 |Risk Level|Description|Action Required|
+|----------|-----------|---------------|
 |Low Risk|All metrics within normal range|Maintain healthy diet|
 |Moderate Risk|	1-2 abnormal values|Targeted dietary changes|
 |High Risk|	Multiple abnormal values|	Immediate dietary intervention + doctor follow-up|
@@ -164,6 +168,7 @@ FLASK → dashboard.html → USER BROWSER
 **BMI Categories**
 
 |BMI|Range|Category|Action|
+|---|-----|--------|------|
 |< 18.5|Underweight|Calorie-dense nutrition|
 |18.5 – 24.9|	Normal|Maintain balance|
 |25 – 29.9|Overweight|Reduce carbs, increase fiber|
@@ -172,6 +177,7 @@ FLASK → dashboard.html → USER BROWSER
 **Health Metrics Thresholds**
 
 |Metric|Normal|Borderline|High Risk|
+|------|------|----------|----------|
 |Blood Sugar|70-100 mg/dL|100-125 mg/dL|≥ 126 mg/dL|
 |Total Cholesterol|< 200 mg/dL|200-239 mg/dL|≥ 240 mg/dL|
 |HDL|> 40 mg/dL|35-40 mg/dL|< 35 mg/dL|
@@ -181,6 +187,7 @@ FLASK → dashboard.html → USER BROWSER
 📈 **Charts Generated**
 
 |Chart|Source|Data|Description|
+|-----|------|----|-----------|
 |BMI Gauge|User inputs|Color-coded scale with marker|
 |Risk Level Gauge|ML classification|Visual representation of health risk|
 |Abnormal Findings|Lab results|Horizontal bar chart of abnormal values|
@@ -190,6 +197,7 @@ FLASK → dashboard.html → USER BROWSER
 🛠️**Tech Stack**
 
 |Layer|Technology|
+|-----|----------|
 |Frontend|HTML5, CSS3, Vanilla JavaScript|
 |Backend|Flask (Python)|
 |OCR|Tesseract 5.5 + pdfplumber + EasyOCR|
