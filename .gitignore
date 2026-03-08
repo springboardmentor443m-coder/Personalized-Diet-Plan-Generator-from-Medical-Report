@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+.Python
+.venv/
+venv/
+
+# Node
+node_modules/
+dist/
+build/
+frontend/dist/
+
+# OS / Editor
+.DS_Store
+.vscode/
+
+# Env / logs
+.env
+backend/.env
+frontend/.env
+*.log
+
+# Runtime artifacts
+backend/data/raw/*.pdf
+backend/data/raw/*.png
+backend/data/raw/*.jpg
+backend/data/processed/*.json
+backend/data/processed/*.pdf
+backend/data/models/*.pkl
+backend/data/datasets/*.csv
+
+# Misc
+.ipynb_checkpoints/
+notebooks/
