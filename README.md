@@ -10,8 +10,6 @@ AI-NutriCare/
 ├── src/
 │   ├── extraction/
 │   │   └── report_parser.py    # OCR + LLM-based lab report extraction
-│   ├── ml_analysis/
-│   │   └── health_classifier.py # ML-based health risk classification
 │   ├── nlp_interpretation/
 │   │   └── medical_nlp.py       # AI/NLP interpretation of doctor notes
 │   └── diet_generator/
