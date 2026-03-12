@@ -10,8 +10,6 @@ AI-NutriCare/
 ├── src/
 │   ├── extraction/
 │   │   └── report_parser.py    # OCR + LLM-based lab report extraction
-│   ├── nlp_interpretation/
-│   │   └── medical_nlp.py       # AI/NLP interpretation of doctor notes
 │   └── diet_generator/
 │       └── diet_planner.py      # AI diet plan generation using Groq LLM
 ├── models/                      # Trained ML models
