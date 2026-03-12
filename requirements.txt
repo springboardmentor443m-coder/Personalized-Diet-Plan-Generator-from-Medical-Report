@@ -1,0 +1,10 @@
+gradio
+groq
+python-dotenv
+pdfplumber
+pytesseract
+opencv-python
+pillow
+matplotlib
+numpy
+pypdfium2
