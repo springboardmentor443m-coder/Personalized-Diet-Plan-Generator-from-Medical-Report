@@ -7,21 +7,18 @@ from PIL import Image
 import io
 import pypdf
 
-# 1. TELL THE COMPUTER EXACTLY WHERE THE FILE IS
-# We use '.' to say "Look in the same folder as this app.py file"
-load_dotenv(dotenv_path="./.env")
+# Load variables from the local .env file
+load_dotenv()
 
-# Change this part:
-# api_key = os.getenv("GOOGLE_API_KEY")
+# Securely grab the key
+api_key = os.getenv("GOOGLE_API_KEY")
 
-# To this (Use your real AIzaSy... key):
-api_key = "AIzaSyDw_dU5NSh4TzDYwmKVb1H06uQnOeWzvRE"
-
-# Keep the rest of the code the same:
+# Safety Check: If the key is missing, show a friendly message, not a crash
 if not api_key:
-    st.error("🚨 DATABASE ERROR: Key is empty.")
-else:
-    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
+    st.warning("Please set your GOOGLE_API_KEY in the environment or .env file.")
+    st.stop() # Stops the app from running further without a key
+
+llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", google_api_key=api_key)
 
 # 2. Define the Prompt (Using the role you provided)
 diet_prompt_template = """
@@ -61,17 +58,25 @@ st.title("🥗 AI Medical Diet Assistant")
 
 with st.sidebar:
     st.header("Patient Info")
-    age = st.number_input("Age", min_value=1, max_value=100, value=23)
-    gender = st.selectbox("Gender", ["Male", "Female", "Other"])
-    weight = st.number_input("Weight (kg)", value=60.0)
-    height_ft = st.number_input("Height (ft)", value=5.5)
-    # Convert feet to meters
-    height_m = height_ft * 0.3048 
-    weight_kg = st.number_input("Weight (kg)", value=60.0)
-
-    # The correct BMI formula
+    
+    # We add a unique 'key' to each input to prevent the DuplicateElementId error
+    age = st.number_input("Age", value=23, key="patient_age")
+    gender = st.selectbox("Gender", ["Male", "Female", "Other"], key="patient_gender")
+    
+    # BMI Math Fix:
+    weight_kg = st.number_input("Weight (kg)", value=60.0, key="patient_weight")
+    height_ft = st.number_input("Height (ft)", value=5.50, key="patient_height")
+    
+    # Convert feet to meters for correct BMI: 1 foot = 0.3048 meters
+    height_m = height_ft * 0.3048
     bmi = round(weight_kg / (height_m ** 2), 2)
-    st.write(f"Your Corrected BMI: {bmi}")
+    
+    st.write(f"**Your Calculated BMI: {bmi}**")
+    
+    # BMI Category logic for your AI prompt
+    if bmi < 18.5: category = "Underweight"
+    elif bmi < 25: category = "Normal"
+    else: category = "Overweight"
     country = st.text_input("Country", "India")
     pref = st.selectbox("Diet Preference", ["Vegetarian", "Non-Vegetarian", "Vegan"])
  

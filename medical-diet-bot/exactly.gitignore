@@ -1,0 +1,9 @@
+# Standard Python ignores
+__pycache__/
+venv/
+*.pyc
+
+# SECURITY: Never upload these
+.env
+exactly.env
+api_key.env
