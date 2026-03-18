@@ -1,0 +1,17 @@
+{
+    "patient_name": "Test User",
+    "abnormal_findings": [
+        {
+            "test": "Hemoglobin",
+            "value": 10.5,
+            "unit": "g/dL",
+            "interpretation": "low"
+        },
+        {
+            "test": "Vitamin D",
+            "value": 15,
+            "unit": "ng/mL",
+            "interpretation": "critical low"
+        }
+    ]
+}
