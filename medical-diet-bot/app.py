@@ -3,11 +3,25 @@ import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import PromptTemplate
 from dotenv import load_dotenv
+from PIL import Image
+import io
+import pypdf
 
-load_dotenv()
+# 1. TELL THE COMPUTER EXACTLY WHERE THE FILE IS
+# We use '.' to say "Look in the same folder as this app.py file"
+load_dotenv(dotenv_path="./.env")
 
-# 1. Setup the AI Model
-llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key="https://console.cloud.google.com/iam-admin/serviceaccounts/details/115498264582495852921;edit=true?previousPage=%2Fapis%2Fcredentials%3Fproject%3Dpossible-jetty-468110-r8&project=possible-jetty-468110-r8")
+# Change this part:
+# api_key = os.getenv("GOOGLE_API_KEY")
+
+# To this (Use your real AIzaSy... key):
+api_key = "AIzaSyDw_dU5NSh4TzDYwmKVb1H06uQnOeWzvRE"
+
+# Keep the rest of the code the same:
+if not api_key:
+    st.error("🚨 DATABASE ERROR: Key is empty.")
+else:
+    llm = ChatGoogleGenerativeAI(model="gemini-1.5-flash", google_api_key=api_key)
 
 # 2. Define the Prompt (Using the role you provided)
 diet_prompt_template = """
@@ -50,17 +64,55 @@ with st.sidebar:
     age = st.number_input("Age", min_value=1, max_value=100, value=23)
     gender = st.selectbox("Gender", ["Male", "Female", "Other"])
     weight = st.number_input("Weight (kg)", value=60.0)
-    height = st.number_input("Height (m)", value=5.02)
-    bmi = round(weight / (height ** 2), 2)
-    st.write(f"Your BMI: {bmi}")
+    height_ft = st.number_input("Height (ft)", value=5.5)
+    # Convert feet to meters
+    height_m = height_ft * 0.3048 
+    weight_kg = st.number_input("Weight (kg)", value=60.0)
+
+    # The correct BMI formula
+    bmi = round(weight_kg / (height_m ** 2), 2)
+    st.write(f"Your Corrected BMI: {bmi}")
     country = st.text_input("Country", "India")
     pref = st.selectbox("Diet Preference", ["Vegetarian", "Non-Vegetarian", "Vegan"])
+ 
+# ... (keep your existing imports and LLM setup)
 
-# File Uploader for your JSON dataset
-uploaded_file = st.file_uploader("Upload Medical Report (JSON)", type=["json"])
+# Update the uploader to accept everything
+uploaded_file = st.file_uploader(
+    "Upload Medical Report", 
+    type=["json", "pdf", "jpg", "jpeg", "png", "ppt", "pptx"]
+)
+if uploaded_file:
+    report_text = ""
+    
+    try:
+        # 1. HANDLE JSON FILES
+        if uploaded_file.name.endswith('.json'):
+            import json
+            data = json.load(uploaded_file)
+            report_text = json.dumps(data, indent=2)
+            st.success("JSON file loaded successfully!")
 
-if uploaded_file and st.button("Generate Diet Plan"):
-    json_content = uploaded_file.read().decode("utf-8")
-    with st.spinner("Analyzing report..."):
-        plan = generate_diet_plan(json_content, bmi, age, gender, country, pref)
-        st.markdown(plan)
+        # 2. HANDLE PDF FILES (Requires: pip install pypdf)
+        elif uploaded_file.name.endswith('.pdf'):
+            import pypdf
+            reader = pypdf.PdfReader(uploaded_file)
+            for page in reader.pages:
+                report_text += page.extract_text()
+            st.success("PDF text extracted successfully!")
+            
+    except Exception as e:
+        st.error(f"Could not read file: {e}")
+
+    # 3. THE BUTTON (Now it will show up as long as report_text is not empty)
+    if report_text:
+        if st.button("Generate My Personalized Diet Plan"):
+            with st.spinner("AI Nutritionist is thinking..."):
+                # Your prompt logic
+                final_prompt = f"Analyze this report and provide a diet plan: {report_text}"
+                
+                # Send to Gemini
+                response = llm.invoke(final_prompt)
+                st.markdown(response.content)
+    else:
+        st.warning("Please upload a valid JSON or PDF report to proceed.")
