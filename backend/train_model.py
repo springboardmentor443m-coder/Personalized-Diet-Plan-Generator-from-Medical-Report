@@ -2,8 +2,8 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from app.services.ml.dataset_loader import DatasetLoader
-from app.services.ml.model_trainer import HealthModelTrainer
+from app.services.dataset_loader import DatasetLoader
+from app.services.model_trainer import HealthModelTrainer
 
 print("="*60)
 print("WEEK 3-4: ML MODEL TRAINING")

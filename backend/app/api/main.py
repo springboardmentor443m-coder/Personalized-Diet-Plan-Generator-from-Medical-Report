@@ -2,18 +2,14 @@ from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Dict, Any
-import sys
+from typing import List, Dict, Any, Optional
 import os
 
-backend_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, backend_path)
-
-from app.services.ocr.ocr_service import OCRService
-from app.services.extraction.data_extractor import DataExtractor
-from app.services.ml.health_predictor import HealthPredictor
-from app.services.diet.diet_generator import DietPlanGenerator
-from app.services.export.pdf_generator import PDFGenerator
+from ..services.ocr_service import OCRService
+from ..services.data_extractor import DataExtractor
+from ..services.health_predictor import HealthPredictor
+from ..services.diet_generator import DietPlanGenerator
+from ..services.pdf_generator import PDFGenerator
 import shutil
 import json
 import traceback
@@ -37,16 +33,25 @@ predictor = HealthPredictor()
 diet_generator = DietPlanGenerator()
 pdf_generator = PDFGenerator()
 
+def calculate_bmi(height_cm, weight_kg):
+    # BMI should come from height and weight whenever they are available.
+    if not height_cm or not weight_kg:
+        return None
+    if height_cm <= 0 or weight_kg <= 0:
+        return None
+    return round(weight_kg / ((height_cm / 100) ** 2), 1)
+
 @app.get("/")
 def root():
     return {"message": "AI-NutriCare API", "status": "running"}
 
 @app.post("/api/upload")
 async def upload_report(file: UploadFile = File(...)):
-    if not file.filename.endswith(('.pdf', '.png', '.jpg', '.jpeg')):
+    filename = file.filename or ""
+    if not filename.endswith(('.pdf', '.png', '.jpg', '.jpeg')):
         raise HTTPException(400, "Only PDF and image files allowed")
     
-    temp_path = f"data/raw/temp_{file.filename}"
+    temp_path = f"data/raw/temp_{filename}"
     with open(temp_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
     
@@ -70,7 +75,7 @@ async def upload_report(file: UploadFile = File(...)):
         extracted_data['recommendations'] = recommendations
         
         if not extracted_data.get('doctor_notes') or len(extracted_data['doctor_notes']) == 0:
-            from app.services.nlp.groq_service import GroqService
+            from ..services.groq_service import GroqService
             groq = GroqService()
             ai_note = groq.generate_ai_doctor_note(extracted_data)
             extracted_data['doctor_notes'] = [f"[AI Generated] {ai_note}"]
@@ -97,19 +102,36 @@ class GenerateRequest(BaseModel):
     extracted: Dict[str, Any]
     allergies: List[str]
     preferences: List[str]
-    height: float = None
-    weight: float = None
+    height: Optional[float] = None
+    weight: Optional[float] = None
     activityLevel: str = 'moderate'
+
+class ChatRequest(BaseModel):
+    question: str
+    extracted: Dict[str, Any]
+    diet_plan: Dict[str, Any] = {}
+    history: List[Dict[str, str]] = []
 
 @app.post("/api/generate")
 async def generate_diet(request: GenerateRequest):
     try:
         extracted = request.extracted
         extracted.setdefault('lab_values', {})
-        
+
+        # Recalculate BMI so the plan does not rely on an OCR-misread BMI value.
+        height_value = request.height or extracted.get('lab_values', {}).get('height', {}).get('value')
+        weight_value = request.weight or extracted.get('lab_values', {}).get('weight', {}).get('value')
+        bmi = calculate_bmi(height_value, weight_value)
+
+        if bmi is not None:
+            extracted['lab_values']['bmi'] = {
+                'value': bmi,
+                'status': 'calculated',
+                'label': 'BMI',
+                'unit': ''
+            }
+
         if request.height and request.weight:
-            bmi = request.weight / ((request.height / 100) ** 2)
-            extracted['lab_values']['bmi'] = {'value': round(bmi, 1), 'status': 'calculated'}
             
             age = extracted.get('patient_info', {}).get('age', 30)
             gender = extracted.get('patient_info', {}).get('gender', 'M')
@@ -130,7 +152,7 @@ async def generate_diet(request: GenerateRequest):
             if cholesterol >= 200:
                 conditions.append('high_cholesterol')
                 daily_calories -= 150
-            if bmi >= 30:
+            if bmi is not None and bmi >= 30:
                 conditions.append('obesity')
                 daily_calories -= 300
             
@@ -176,6 +198,8 @@ async def generate_diet(request: GenerateRequest):
         diet_plan_data = {k: v for k, v in diet_plan_raw.items() if not k.startswith('_')}
         calories = diet_plan_raw.get('_calories', extracted.get('_calculated_calories', 1800))
         distribution = diet_plan_raw.get('_distribution', {})
+        macro_targets = diet_plan_raw.get('_macro_targets', {})
+        patient_bmi = diet_plan_raw.get('_patient_bmi', extracted.get('lab_values', {}).get('bmi', {}).get('value'))
         generation_source = diet_plan_raw.get('_source', 'unknown')
         
         print(f"\n=== GENERATING PDF ===")
@@ -191,7 +215,13 @@ async def generate_diet(request: GenerateRequest):
             "patient_info": extracted.get('patient_info', {}),
             "lab_values": extracted.get('lab_values', {}),
             "ml_predictions": extracted.get('ml_predictions', {}),
-            "diet_plan": {**diet_plan_data, '_calories': calories, '_distribution': distribution},
+            "diet_plan": {
+                **diet_plan_data,
+                '_calories': calories,
+                '_distribution': distribution,
+                '_macro_targets': macro_targets,
+                '_patient_bmi': patient_bmi
+            },
             "diet_generation_source": generation_source,
             "doctor_notes": extracted.get('doctor_notes', []),
             "conditions": extracted.get('_conditions', []),
@@ -210,6 +240,26 @@ def download_pdf():
     if not os.path.exists(pdf_path):
         raise HTTPException(404, "PDF not found")
     return FileResponse(pdf_path, filename="diet_plan.pdf", media_type="application/pdf")
+
+@app.post("/api/chat")
+async def chat_with_assistant(request: ChatRequest):
+    try:
+        from ..services.groq_service import GroqService
+        groq = GroqService()
+        result = groq.answer_patient_question(
+            request.question,
+            health_data=request.extracted or {},
+            diet_plan=request.diet_plan or {},
+            history=request.history or []
+        )
+        return {
+            "success": True,
+            "answer": result.get("answer", ""),
+            "source": result.get("source", "fallback")
+        }
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(500, f"Chat error: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn

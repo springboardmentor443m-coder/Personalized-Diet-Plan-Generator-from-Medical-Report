@@ -1,4 +1,4 @@
-from app.services.nlp.groq_service import GroqService
+from app.services.groq_service import GroqService
 import json
 
 class DietPlanGenerator:

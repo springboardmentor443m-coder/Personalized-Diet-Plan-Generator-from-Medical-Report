@@ -3,6 +3,49 @@ import { api } from './services/api';
 import { calculateMealCalories } from './utils/nutritionCalculator';
 import './App.css';
 
+const LAB_DISPLAY_ORDER = [
+  'glucose', 'hba1c', 'bmi', 'cholesterol_total', 'hdl', 'ldl', 'triglycerides',
+  'bp_systolic', 'bp_diastolic', 'hemoglobin', 'pcv', 'rbc_count', 'wbc_count',
+  'mcv', 'mch', 'mchc', 'esr', 'creatinine', 'uric_acid',
+  'urea', 'sodium', 'potassium', 'chloride', 'vitamin_d', 'vitamin_b12',
+  'tsh', 'platelets', 'weight', 'height'
+];
+
+const formatStatus = (status) => {
+  if (!status) return 'Unknown';
+  return status.replace(/_/g, ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+};
+
+const getStatusTone = (status) => {
+  const normalized = (status || '').toLowerCase();
+  if (['normal', 'optimal'].includes(normalized)) return 'ok';
+  if (['borderline', 'elevated', 'near_optimal', 'prediabetes', 'insufficient', 'calculated'].includes(normalized)) return 'warn';
+  if (['high', 'low', 'diabetes', 'hypertension', 'obese', 'underweight', 'deficient', 'out_of_range'].includes(normalized)) return 'alert';
+  return 'info';
+};
+
+const formatLabValue = (value) => {
+  if (typeof value !== 'number') return value ?? 'N/A';
+  return Number.isInteger(value) ? value : value.toFixed(1);
+};
+
+const getSortedLabEntries = (labValues = {}) => {
+  return Object.entries(labValues).sort(([keyA], [keyB]) => {
+    const indexA = LAB_DISPLAY_ORDER.indexOf(keyA);
+    const indexB = LAB_DISPLAY_ORDER.indexOf(keyB);
+    const safeA = indexA === -1 ? LAB_DISPLAY_ORDER.length : indexA;
+    const safeB = indexB === -1 ? LAB_DISPLAY_ORDER.length : indexB;
+    return safeA - safeB || keyA.localeCompare(keyB);
+  });
+};
+
+const CHAT_SUGGESTIONS = [
+  'Why is this diet plan suitable for my report?',
+  'Which report values should I pay most attention to?',
+  'What can I eat if I feel hungry between meals?',
+  'How does this plan help with my abnormal lab values?'
+];
+
 function App() {
   const [file, setFile] = useState(null);
   const [extracting, setExtracting] = useState(false);
@@ -15,9 +58,24 @@ function App() {
   const [activeDay, setActiveDay] = useState(0);
   const [showPatientForm, setShowPatientForm] = useState(false);
   const [patientData, setPatientData] = useState({ height: '', weight: '', activityLevel: 'moderate' });
+  const [activeNav, setActiveNav] = useState('dashboard');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   const allergyOptions = ['Gluten', 'Dairy', 'Nuts', 'Eggs', 'Soy', 'Shellfish'];
   const preferenceOptions = ['Vegetarian', 'Veg + Non-Veg', 'Non-Veg', 'Vegan'];
+
+  const handleNavChange = (sectionId) => {
+    setActiveNav(sectionId);
+    if (sectionId === 'assistant') return;
+    window.requestAnimationFrame(() => {
+      const section = document.getElementById(sectionId);
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  };
 
   const handleFileSelect = async (e) => {
     const selectedFile = e.target.files[0];
@@ -31,9 +89,21 @@ function App() {
     try {
       const data = await api.extract(selectedFile);
       setExtracted(data);
-      
+      setChatMessages([]);
+
+      const extractedHeight = data.lab_values?.height?.value || '';
+      const extractedWeight = data.lab_values?.weight?.value || '';
+      setPatientData((prev) => ({
+        ...prev,
+        height: extractedHeight ? String(extractedHeight) : '',
+        weight: extractedWeight ? String(extractedWeight) : '',
+        activityLevel: prev.activityLevel
+      }));
+
       const hasBMI = data.lab_values?.bmi?.value;
-      if (!hasBMI) {
+      const hasHeight = data.lab_values?.height?.value;
+      const hasWeight = data.lab_values?.weight?.value;
+      if (!hasBMI || !hasHeight || !hasWeight) {
         setShowPatientForm(true);
       }
     } catch (err) {
@@ -69,10 +139,10 @@ function App() {
       };
       
       const data = await api.generate(payload.extracted, payload.allergies, payload.preferences, payload.height, payload.weight, payload.activityLevel);
-      console.log('Generated diet plan:', data);
       setDietPlan(data);
       setActiveDay(0);
       setShowPatientForm(false);
+      setChatMessages([]);
     } catch (err) {
       console.error('Generation error:', err);
       alert('Failed to generate diet plan: ' + err.message);
@@ -91,6 +161,52 @@ function App() {
     setDietPreference(item);
   };
 
+  const sendChatMessage = async (question) => {
+    const trimmedQuestion = question.trim();
+    if (!trimmedQuestion || !extracted || chatLoading) return;
+
+    const nextMessages = [...chatMessages, { role: 'user', content: trimmedQuestion }];
+    setChatMessages(nextMessages);
+    setChatInput('');
+    setChatLoading(true);
+
+    try {
+      const history = nextMessages
+        .filter((message) => ['user', 'assistant'].includes(message.role))
+        .map((message) => ({ role: message.role, content: message.content }));
+      const response = await api.chat(trimmedQuestion, extracted, dietPlan, history);
+      setChatMessages([
+        ...nextMessages,
+        { role: 'assistant', content: response.answer, source: response.source }
+      ]);
+    } catch (err) {
+      console.error('Chat error:', err);
+      setChatMessages([
+        ...nextMessages,
+        {
+          role: 'assistant',
+          content: err.message || 'The assistant could not answer that right now.',
+          source: 'fallback'
+        }
+      ]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleSuggestionClick = (suggestion) => {
+    setChatInput(suggestion);
+  };
+
+  const handleChatKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if (chatInput.trim() && !chatLoading && extracted) {
+        sendChatMessage(chatInput);
+      }
+    }
+  };
+
   const dayKeys = dietPlan?.diet_plan
     ? Object.keys(dietPlan.diet_plan).filter(key => key.startsWith('day_')).sort()
     : [];
@@ -98,10 +214,105 @@ function App() {
   const activeDayMeals = dayKeys.length > 0 ? dietPlan.diet_plan[dayKeys[selectedDayIndex]] : null;
   const macroTargets = dietPlan?.diet_plan?._macro_targets || { carbs_pct: 45, protein_pct: 25, fat_pct: 30 };
   const totalCalories = dietPlan?.diet_plan?._calories || 1800;
+  const extractedLabEntries = getSortedLabEntries(extracted?.lab_values);
+  const generatedLabEntries = getSortedLabEntries(dietPlan?.lab_values);
+  const planJustification = dietPlan?.diet_plan?.plan_justification;
+  // Use the strongest BMI source after generation.
+  const resolvedPatientBMI = dietPlan?.diet_plan?._patient_bmi
+    ?? dietPlan?.lab_values?.bmi?.value
+    ?? extracted?.lab_values?.bmi?.value
+    ?? 'N/A';
   const donutCircumference = 2 * Math.PI * 52;
   const carbsArc = Math.round((macroTargets.carbs_pct / 100) * donutCircumference);
   const proteinArc = Math.round((macroTargets.protein_pct / 100) * donutCircumference);
   const fatArc = Math.round((macroTargets.fat_pct / 100) * donutCircumference);
+  const assistantPanel = (
+    <div className="assistant-page" id="assistant">
+      <div className="assistant-grid">
+        {dietPlan && (
+          <div className="glass-card fade-up assistant-plan-preview">
+            <div className="assistant-plan-header">
+              <h3>Current Diet Plan</h3>
+              <span>{totalCalories} kcal/day • BMI {resolvedPatientBMI}</span>
+            </div>
+
+            <div className="day-tabs assistant-day-tabs">
+              {dayKeys.map((day, idx) => (
+                <button
+                  key={day}
+                  className={`day-tab ${activeDay === idx ? 'active' : ''}`}
+                  onClick={() => setActiveDay(idx)}
+                >
+                  Day {idx + 1}
+                </button>
+              ))}
+            </div>
+
+            <div className="meals-grid assistant-meals-grid">
+              {activeDayMeals && Object.entries(activeDayMeals).map(([type, meal]) => (
+                <div key={type} className="meal-tile">
+                  <div className="meal-header">
+                    <span>{type.charAt(0).toUpperCase() + type.slice(1)}</span>
+                    <span className="meal-kcal">~{calculateMealCalories(meal?.macros?.protein || 0, meal?.macros?.carbs || 0, meal?.macros?.fat || 0)} kcal</span>
+                  </div>
+                  <div className="meal-name">{meal.meal}</div>
+                  <div className="meal-reason">{meal.reason}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="glass-card fade-up assistant-chat-card">
+          <div className="chat-header-row">
+            <h3>Ask the Assistant</h3>
+          </div>
+
+          <div className="suggestion-grid">
+            {CHAT_SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                className="suggestion-chip"
+                onClick={() => handleSuggestionClick(suggestion)}
+                disabled={!extracted || chatLoading}
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+
+          <div className="chat-thread">
+            {chatMessages.map((message, index) => (
+              <div key={`${message.role}-${index}`} className={`chat-bubble chat-${message.role}`}>
+                <div className="chat-role">{message.role === 'assistant' ? 'AI Assistant' : 'You'}</div>
+                <div>{message.content}</div>
+              </div>
+            ))}
+            {chatLoading && (
+              <div className="chat-bubble chat-assistant">
+                <div className="chat-role">AI Assistant</div>
+                <div>Thinking through the report and diet plan...</div>
+              </div>
+            )}
+          </div>
+
+          <div className="chat-composer">
+            <textarea
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={handleChatKeyDown}
+              placeholder={extracted ? 'Ask a question about your report or diet plan' : 'Upload a report to start chatting'}
+              rows="3"
+              disabled={!extracted || chatLoading}
+            />
+            <button onClick={() => sendChatMessage(chatInput)} disabled={!extracted || !chatInput.trim() || chatLoading}>
+              {chatLoading ? 'Sending...' : 'Send'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -118,15 +329,14 @@ function App() {
           </div>
         </div>
         <div className="nav-center">
-          <a className="nav-link active">Dashboard</a>
-          <a className="nav-link">Analysis</a>
-          <a className="nav-link">Diet Plans</a>
-          <a className="nav-link">Reports</a>
-          <a className="nav-link">History</a>
+          <button className={`nav-link ${activeNav === 'dashboard' ? 'active' : ''}`} onClick={() => handleNavChange('dashboard')}>Dashboard</button>
+          <button className={`nav-link ${activeNav === 'diet-plan' ? 'active' : ''}`} onClick={() => handleNavChange('diet-plan')}>Diet Plan</button>
+          <button className={`nav-link ${activeNav === 'assistant' ? 'active' : ''}`} onClick={() => handleNavChange('assistant')}>Assistant</button>
         </div>
       </nav>
 
-      <div className="main-layout">
+      {activeNav === 'assistant' ? assistantPanel : (
+      <div className="main-layout" id="dashboard">
         <aside className="left-col">
           <div className="glass-card fade-up">
             <h3>Medical Report Upload</h3>
@@ -183,7 +393,7 @@ function App() {
             </div>
           )}
 
-          {extracted && !showPatientForm && (
+          {extracted && (
             <div className="glass-card fade-up patient-card">
               <div className="card-header-row">
                 <h3>Extracted Patient Data</h3>
@@ -201,30 +411,14 @@ function App() {
                   <span className="val-info">{extracted.patient_info.age} / {extracted.patient_info.gender || 'N/A'}</span>
                 </div>
               )}
-              {extracted.lab_values?.glucose && (
-                <div className="data-row">
-                  <span>Blood Sugar</span>
-                  <span className={`val-${extracted.lab_values.glucose.status}`}>
-                    {extracted.lab_values.glucose.value} mg/dL
+              {extractedLabEntries.map(([key, lab]) => (
+                <div className="data-row" key={key}>
+                  <span>{lab.label || key.replace(/_/g, ' ')}</span>
+                  <span className={`val-${getStatusTone(lab.status)}`}>
+                    {formatLabValue(lab.value)}{lab.unit ? ` ${lab.unit}` : ''} · {formatStatus(lab.status)}
                   </span>
                 </div>
-              )}
-              {extracted.lab_values?.cholesterol_total && (
-                <div className="data-row">
-                  <span>Cholesterol</span>
-                  <span className={`val-${extracted.lab_values.cholesterol_total.status}`}>
-                    {extracted.lab_values.cholesterol_total.value} mg/dL
-                  </span>
-                </div>
-              )}
-              {extracted.lab_values?.bmi && (
-                <div className="data-row">
-                  <span>BMI</span>
-                  <span className={`val-${extracted.lab_values.bmi.status}`}>
-                    {extracted.lab_values.bmi.value}
-                  </span>
-                </div>
-              )}
+              ))}
             </div>
           )}
 
@@ -280,44 +474,20 @@ function App() {
           {dietPlan ? (
             <>
               <div className="metrics-strip">
-                {dietPlan.lab_values?.glucose && (
-                  <div className={`metric-card ${dietPlan.lab_values.glucose.status === 'diabetes' || dietPlan.lab_values.glucose.status === 'prediabetes' ? 'border-alert' : 'border-ok'}`}>
-                    <span className="metric-badge">{dietPlan.lab_values.glucose.status === 'normal' ? 'Normal' : 'High'}</span>
-                    <div className="metric-val">{dietPlan.lab_values.glucose.value}</div>
-                    <div className="metric-unit">mg/dL</div>
-                    <div className="metric-label">Blood Sugar</div>
+                {generatedLabEntries.map(([key, lab]) => (
+                  <div key={key} className={`metric-card border-${getStatusTone(lab.status)}`}>
+                    <span className={`metric-badge badge-${getStatusTone(lab.status)}`}>{formatStatus(lab.status)}</span>
+                    <div className="metric-val">{formatLabValue(lab.value)}</div>
+                    <div className="metric-unit">{lab.unit || ''}</div>
+                    <div className="metric-label">{lab.label || key.replace(/_/g, ' ')}</div>
                   </div>
-                )}
-                {dietPlan.lab_values?.cholesterol_total && (
-                  <div className={`metric-card ${dietPlan.lab_values.cholesterol_total.status === 'high' || dietPlan.lab_values.cholesterol_total.status === 'borderline' ? 'border-warn' : 'border-ok'}`}>
-                    <span className="metric-badge">{dietPlan.lab_values.cholesterol_total.status === 'normal' ? 'Normal' : 'Elevated'}</span>
-                    <div className="metric-val">{dietPlan.lab_values.cholesterol_total.value}</div>
-                    <div className="metric-unit">mg/dL</div>
-                    <div className="metric-label">Cholesterol</div>
-                  </div>
-                )}
-                {dietPlan.lab_values?.bmi && (
-                  <div className={`metric-card ${dietPlan.lab_values.bmi.status === 'normal' ? 'border-ok' : 'border-warn'}`}>
-                    <span className="metric-badge">{dietPlan.lab_values.bmi.status === 'normal' ? 'Normal' : dietPlan.lab_values.bmi.status}</span>
-                    <div className="metric-val">{dietPlan.lab_values.bmi.value}</div>
-                    <div className="metric-unit"></div>
-                    <div className="metric-label">BMI</div>
-                  </div>
-                )}
-                {dietPlan.lab_values?.hba1c && (
-                  <div className={`metric-card ${dietPlan.lab_values.hba1c.status === 'diabetes' || dietPlan.lab_values.hba1c.status === 'prediabetes' ? 'border-alert' : 'border-ok'}`}>
-                    <span className="metric-badge">{dietPlan.lab_values.hba1c.status === 'normal' ? 'Normal' : 'High'}</span>
-                    <div className="metric-val">{dietPlan.lab_values.hba1c.value}</div>
-                    <div className="metric-unit">%</div>
-                    <div className="metric-label">HbA1c</div>
-                  </div>
-                )}
+                ))}
               </div>
 
-              <div className="glass-card diet-plan-card">
+              <div className="glass-card diet-plan-card" id="diet-plan">
                 <div className="plan-header">
                   <h2>{dietPlan.patient_info?.name || 'Patient'}</h2>
-                  <div className="plan-meta">{dietPlan.diet_plan?._calories || 1800} kcal/day • {dietPlan.patient_info?.age || 'N/A'} years • BMI: {dietPlan.diet_plan?._patient_bmi || 'N/A'}</div>
+                  <div className="plan-meta">{dietPlan.diet_plan?._calories || 1800} kcal/day • {dietPlan.patient_info?.age || 'N/A'} years • BMI: {resolvedPatientBMI}</div>
                 </div>
                 <div className="condition-chips">
                   {extracted.ml_predictions?.diabetes?.detected && (
@@ -328,6 +498,24 @@ function App() {
                   )}
                   <span className="chip chip-cyan">AI Generated</span>
                 </div>
+
+                {planJustification && (
+                  <div className="plan-justification">
+                    <h3>Why This Plan Fits</h3>
+                    <p>{planJustification.summary}</p>
+                    <div className="justification-list">
+                      {Array.isArray(planJustification.condition_support) && planJustification.condition_support.map((point, index) => (
+                        <div key={index} className="justification-item">{point}</div>
+                      ))}
+                      {planJustification.preference_support && (
+                        <div className="justification-item">{planJustification.preference_support}</div>
+                      )}
+                      {planJustification.allergy_support && (
+                        <div className="justification-item">{planJustification.allergy_support}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div className="day-tabs">
                   {dayKeys.map((day, idx) => (
@@ -398,18 +586,6 @@ function App() {
                 </div>
               </div>
 
-              {dietPlan.doctor_notes && dietPlan.doctor_notes.length > 0 && (
-                <div className="glass-card fade-up">
-                  <h3>Doctor's Notes</h3>
-                  <div className="notes-box">
-                    <p>"{dietPlan.doctor_notes[0].substring(0, 200)}{dietPlan.doctor_notes[0].length > 200 ? '...' : ''}"</p>
-                  </div>
-                  <div className="notes-badge">
-                    {dietPlan.doctor_notes[0].includes('[AI Generated]') ? '🤖 AI Generated' : '⚡ From Report'}
-                  </div>
-                </div>
-              )}
-
               <div className="glass-card fade-up">
                 <h3>Daily Targets</h3>
                 <div className="target-row">
@@ -437,6 +613,7 @@ function App() {
           )}
         </aside>
       </div>
+      )}
     </>
   );
 }

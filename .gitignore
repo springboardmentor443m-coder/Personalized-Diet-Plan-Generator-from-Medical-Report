@@ -30,7 +30,6 @@ backend/data/raw/*.png
 backend/data/raw/*.jpg
 backend/data/processed/*.json
 backend/data/processed/*.pdf
-backend/data/models/*.pkl
 backend/data/datasets/*.csv
 
 # Misc

@@ -30,6 +30,24 @@ export const api = {
     return res.json();
   },
 
+  async chat(question, extracted, dietPlan, history = []) {
+    const res = await fetch(`${API_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        question,
+        extracted,
+        diet_plan: dietPlan || {},
+        history
+      })
+    });
+    if (!res.ok) {
+      const error = await res.text();
+      throw new Error(error);
+    }
+    return res.json();
+  },
+
   downloadPDF() {
     window.open(`${API_URL}/api/download-pdf`, '_blank');
   }

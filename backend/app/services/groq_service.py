@@ -52,6 +52,62 @@ Output:"""
             return response.choices[0].message.content.strip()
         except Exception:
             return f"Patient shows signs of {', '.join(conditions) if conditions else 'normal health'}. Recommend dietary modifications and regular monitoring."
+
+    def answer_patient_question(self, question, health_data=None, diet_plan=None, history=None):
+        question = (question or "").strip()
+        if not question:
+            return {
+                "answer": "Ask a specific question about the diet plan, report values, or practical food choices.",
+                "source": "fallback"
+            }
+
+        health_data = health_data or {}
+        diet_plan = diet_plan or {}
+        history = history or []
+        context = self._build_chat_context(health_data, diet_plan)
+        system_prompt = f"""You are an AI nutrition assistant for a patient dashboard.
+
+Use only the context below. Answer clearly, practically, and safely.
+- Focus on explaining the medical report and the generated diet plan.
+- If the answer is uncertain because data is missing, say so directly.
+- Do not invent medications, diagnoses, or lab values.
+- Keep the answer under 180 words.
+
+Context:
+{context}
+"""
+
+        if not self.client:
+            return {
+                "answer": self._fallback_chat_answer(question, health_data, diet_plan),
+                "source": "fallback"
+            }
+
+        try:
+            messages = [{"role": "system", "content": system_prompt}]
+            for item in history[-6:]:
+                role = item.get("role")
+                content = (item.get("content") or "").strip()
+                if role in ["user", "assistant"] and content:
+                    messages.append({"role": role, "content": content})
+            messages.append({"role": "user", "content": question})
+
+            response = self.client.chat.completions.create(
+                messages=messages,
+                model=self.model,
+                temperature=0.3,
+                max_tokens=220
+            )
+            answer = response.choices[0].message.content.strip()
+            return {
+                "answer": answer,
+                "source": "groq"
+            }
+        except Exception:
+            return {
+                "answer": self._fallback_chat_answer(question, health_data, diet_plan),
+                "source": "fallback"
+            }
     
     def generate_diet_plan(self, health_data, days=3, preferences=None):
         import re
@@ -151,6 +207,12 @@ IMPORTANT:
 
 Return ONLY valid JSON with NO markdown:
 {{
+"plan_justification": {{
+"summary": "2-3 sentence explanation of why this diet plan suits the patient",
+"condition_support": ["how meals support condition 1", "how meals support condition 2"],
+"preference_support": "how the plan respects diet preference",
+"allergy_support": "how the plan avoids allergy triggers"
+}},
 "day_1":{{"breakfast":{{"meal":"name","portion":"amount","reason":"why it helps patient health","ingredients":["item1","item2"],"macros":{{"protein":20,"carbs":45,"fat":10}}}},"lunch":{{...}},"snack":{{...}},"dinner":{{...}}}},
 "day_2":{{...}},
 "day_3":{{...}}
@@ -196,6 +258,7 @@ Return ONLY valid JSON with NO markdown:
             diet_plan['_macro_targets'] = macro_targets
             diet_plan['_patient_bmi'] = bmi
             diet_plan['_source'] = 'groq'
+            diet_plan.setdefault('plan_justification', self._build_fallback_justification(conditions, diet_type, preferences.get('allergies', []) if preferences else []))
             return diet_plan
             
         except Exception as e:
@@ -297,6 +360,7 @@ Return ONLY valid JSON with NO markdown:
         plan['_distribution'] = cal_dist
         plan['_macro_targets'] = macro_targets
         plan['_source'] = 'fallback'
+        plan['plan_justification'] = self._build_fallback_justification(conditions, diet_type, allergies)
         return plan
 
     def _calculate_macro_targets(self, calories, conditions, diet_type):
@@ -330,3 +394,84 @@ Return ONLY valid JSON with NO markdown:
             'protein_g': protein_g,
             'fat_g': fat_g
         }
+
+    def _build_fallback_justification(self, conditions, diet_type, allergies):
+        readable_conditions = [condition.replace('_', ' ') for condition in conditions] or ['general wellness']
+        allergy_text = ", ".join(allergies) if allergies else "common dietary triggers"
+        return {
+            'summary': f"This plan is structured around {', '.join(readable_conditions)} while keeping portions balanced and meal timing consistent through the day.",
+            'condition_support': [
+                f"Meal choices prioritize fiber, balanced carbohydrates, and protein to support {readable_conditions[0]}."
+            ],
+            'preference_support': f"The meals follow a {diet_type} pattern so the plan remains practical for the patient's food preference.",
+            'allergy_support': f"Suggested meals are selected to avoid {allergy_text} wherever possible."
+        }
+
+    def _build_chat_context(self, health_data, diet_plan):
+        patient = health_data.get('patient_info', {})
+        lab_values = health_data.get('lab_values', {})
+        ml_predictions = health_data.get('ml_predictions', {})
+        plan_payload = diet_plan.get('diet_plan', diet_plan) if isinstance(diet_plan, dict) else {}
+
+        abnormal_labs = []
+        for key, data in lab_values.items():
+            status = data.get('status')
+            if status not in ['normal', 'optimal', 'unknown', None]:
+                abnormal_labs.append(f"{data.get('label', key)}: {data.get('value')} {data.get('unit', '')} ({status})".strip())
+
+        detected_conditions = []
+        for condition, data in ml_predictions.items():
+            if data.get('detected'):
+                detected_conditions.append(f"{condition.replace('_', ' ')} ({data.get('risk', 'unknown')} risk)")
+
+        meal_lines = []
+        for key in sorted(plan_payload.keys()):
+            if not key.startswith('day_') or not isinstance(plan_payload.get(key), dict):
+                continue
+            meals = plan_payload[key]
+            meal_lines.append(
+                f"{key}: " + "; ".join(
+                    f"{meal_name}={meal_data.get('meal', 'N/A')}"
+                    for meal_name, meal_data in meals.items()
+                    if isinstance(meal_data, dict)
+                )
+            )
+
+        justification = plan_payload.get('plan_justification', {})
+        return "\n".join([
+            f"Patient: age={patient.get('age', 'N/A')}, gender={patient.get('gender', 'N/A')}, name={patient.get('name', 'N/A')}",
+            f"Abnormal labs: {', '.join(abnormal_labs) if abnormal_labs else 'none noted'}",
+            f"Detected conditions: {', '.join(detected_conditions) if detected_conditions else 'none detected'}",
+            f"Diet calories: {plan_payload.get('_calories', 'N/A')}",
+            f"Diet preference context: {diet_plan.get('preferences', {}) if isinstance(diet_plan, dict) else {}}",
+            f"Diet justification: {justification.get('summary', 'not available') if isinstance(justification, dict) else 'not available'}",
+            f"Meals: {' | '.join(meal_lines) if meal_lines else 'diet plan not generated yet'}"
+        ])
+
+    def _fallback_chat_answer(self, question, health_data, diet_plan):
+        question_lower = question.lower()
+        lab_values = health_data.get('lab_values', {})
+        plan_payload = diet_plan.get('diet_plan', diet_plan) if isinstance(diet_plan, dict) else {}
+        justification = plan_payload.get('plan_justification', {}) if isinstance(plan_payload, dict) else {}
+
+        if any(term in question_lower for term in ['why', 'suitable', 'fit', 'plan']):
+            return justification.get(
+                'summary',
+                "The diet plan is based on the extracted report values, detected health risks, calorie target, food preference, and allergy constraints."
+            )
+
+        if any(term in question_lower for term in ['glucose', 'sugar', 'cholesterol', 'hba1c', 'bmi', 'creatinine', 'urea']):
+            for key, data in lab_values.items():
+                if key in question_lower or data.get('label', '').lower() in question_lower:
+                    return f"{data.get('label', key)} is {data.get('value')} {data.get('unit', '')} and is classified as {data.get('status', 'unknown')} in the current report."
+
+        if any(term in question_lower for term in ['breakfast', 'lunch', 'dinner', 'snack']):
+            for day_key in sorted(plan_payload.keys()):
+                if not day_key.startswith('day_'):
+                    continue
+                meals = plan_payload.get(day_key, {})
+                for meal_name, meal_data in meals.items():
+                    if meal_name in question_lower and isinstance(meal_data, dict):
+                        return f"{day_key.replace('_', ' ').title()} {meal_name} is {meal_data.get('meal', 'not available')}. It is included because {meal_data.get('reason', 'it matches the diet goals')}."
+
+        return "I can explain report values, calorie targets, meal choices, and how the plan matches allergies or food preference. Ask about a specific test or meal."
