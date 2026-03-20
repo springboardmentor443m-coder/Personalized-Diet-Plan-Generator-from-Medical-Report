@@ -43,6 +43,22 @@ CRITICAL RULES:
 10. When trends show IMPROVEMENT, note specifically that the current dietary
     approach may be working and suggest maintaining rather than intensifying.
 
+EVIDENCE-BASED GUIDELINE USAGE:
+11a. You will receive RETRIEVED MEDICAL NUTRITION GUIDELINES from a curated
+     knowledge base. PRIORITIZE these guidelines when making recommendations.
+11b. If a retrieved guideline directly addresses the patient's condition,
+     cite it in your clinical reasoning (e.g., "Per CKD guidelines, restrict
+     protein to 0.6-0.8 g/kg/day").
+11c. When retrieved guidelines conflict with general knowledge, prefer the
+     specific retrieved guideline.
+11d. Do NOT invent guidelines — if the retrieved context does not cover a
+     specific situation, rely on your general training and note the gap.
+11e. You may also receive LATEST MEDICAL RESEARCH from PubMed. Use these
+     peer-reviewed findings to support or refine your recommendations.
+     Cite the study when relevant (e.g., "Recent meta-analysis suggests...").
+11f. When PubMed evidence and knowledge base guidelines agree, this
+     strengthens the recommendation confidence. Note such agreement.
+
 SPECIFICITY RULES (MANDATORY):
 11. Every meal MUST list SPECIFIC, real food items — never generic labels
     like "low carb breakfast" or "light meal" or "healthy snack".
@@ -100,6 +116,16 @@ UNRESOLVED DATA CONFLICTS
 DIETARY PREFERENCES & CONSTRAINTS (user-specified)
 ═══════════════════════════════════════
 {dietary_preferences}
+
+═══════════════════════════════════════
+EVIDENCE-BASED NUTRITION GUIDELINES (retrieved from medical knowledge base)
+═══════════════════════════════════════
+{rag_context}
+
+═══════════════════════════════════════
+LATEST MEDICAL RESEARCH (retrieved from PubMed)
+═══════════════════════════════════════
+{web_context}
 
 ═══════════════════════════════════════
 RESPONSE FORMAT (STRICT JSON)
@@ -555,7 +581,7 @@ def build_diet_prompt(
     aggregated_state: dict,
     per_doc_results: list[dict] | None = None,
     dietary_preferences: dict | None = None,
-) -> tuple[str, str]:
+) -> tuple[str, str, list[dict]]:
     """Build the system and user prompt pair for diet plan generation.
 
     Parameters
@@ -566,6 +592,12 @@ def build_diet_prompt(
         Per-document extraction results (prescriptions, diagnoses, etc.).
     dietary_preferences : dict | None
         User-specified preferences (diet type, cuisine, allergies, etc.).
+
+    Returns
+    -------
+    tuple[str, str, list[dict]]
+        (system_prompt, user_prompt, retrieved_rag_chunks)
+        The retrieved chunks are passed through for citation verification.
     """
     per_doc = per_doc_results or []
     prefs = dietary_preferences or {}
@@ -595,6 +627,46 @@ def build_diet_prompt(
 
     dietary_prefs_text = _format_dietary_preferences(prefs)
 
+    # RAG: retrieve evidence-based nutrition guidelines from ChromaDB knowledge store
+    rag_context = ""
+    rag_chunks: list[dict] = []  # raw chunks for citation verification
+    try:
+        from modules.knowledge_store import retrieve_context as _kb_retrieve
+        rag_context, rag_chunks = _kb_retrieve(aggregated_state, per_doc)
+        if rag_context:
+            logger.info("ChromaDB RAG context injected: %d chars, %d chunks", len(rag_context), len(rag_chunks))
+        else:
+            logger.info("ChromaDB RAG returned no matching guidelines")
+    except Exception as exc:
+        logger.warning("ChromaDB RAG retrieval failed (non-fatal): %s", exc)
+        rag_context = ""
+        rag_chunks = []
+
+    if not rag_context:
+        rag_context = (
+            "No specific guidelines retrieved — rely on your general "
+            "medical nutrition therapy training."
+        )
+
+    # Web retrieval: fetch latest PubMed evidence for patient's conditions
+    web_context = ""
+    try:
+        from modules.web_retrieval import retrieve_web_context as _web_retrieve
+        web_context = _web_retrieve(aggregated_state, per_doc)
+        if web_context:
+            logger.info("Web context injected: %d chars", len(web_context))
+        else:
+            logger.info("Web retrieval returned no results")
+    except Exception as exc:
+        logger.warning("Web retrieval failed (non-fatal): %s", exc)
+        web_context = ""
+
+    if not web_context:
+        web_context = (
+            "No recent PubMed articles retrieved — rely on knowledge base "
+            "guidelines and general training."
+        )
+
     # Determine meal plan duration from preferences
     meal_freq = prefs.get("meal_frequency", "5_small")
     meal_plan_duration = "7-day"
@@ -612,6 +684,8 @@ def build_diet_prompt(
         diagnoses=diagnoses,
         conflicts=conflicts,
         dietary_preferences=dietary_prefs_text,
+        rag_context=rag_context,
+        web_context=web_context,
         meal_slots_schema=meal_slots_schema,
     )
 
@@ -621,4 +695,5 @@ def build_diet_prompt(
         list(prefs.keys()) if prefs else "none",
     )
 
-    return DIET_SYSTEM_PROMPT, user_prompt
+    # Return retrieved chunks alongside prompts for citation verification
+    return DIET_SYSTEM_PROMPT, user_prompt, rag_chunks

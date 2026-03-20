@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config.settings import UPLOAD_DIR, SESSION_TTL_HOURS
-from api.routers import health, reports, diet, tasks
+from api.routers import health, reports, diet, tasks, chat
 from services.database import init_db, cleanup_old_sessions
 
 logging.basicConfig(
@@ -27,6 +27,39 @@ async def lifespan(app: FastAPI):
     logger.info("Upload directory ready: %s", UPLOAD_DIR)
 
     init_db()
+
+    # ==================================================================
+    # PRE-LOAD EMBEDDING MODEL & INDEX KNOWLEDGE BASE AT STARTUP
+    # This eliminates the ~6+ second delay on first request
+    # ==================================================================
+    logger.info("Pre-loading embedding model and indexing knowledge base...")
+    
+    try:
+        # 1. Pre-load the embedding model (forces model download/caching)
+        from modules.knowledge_store import _get_embedding_function, _get_client, _get_collection
+        from modules.knowledge_store import COLLECTION_GUIDELINES, index_knowledge_base
+        
+        # Initialize embedding function (loads SentenceTransformer model)
+        ef = _get_embedding_function()
+        logger.info("✓ Embedding model pre-loaded")
+        
+        # 2. Pre-initialize ChromaDB client
+        client = _get_client()
+        logger.info("✓ ChromaDB client initialized")
+        
+        # 3. Pre-index knowledge base if not already indexed
+        collection = _get_collection(COLLECTION_GUIDELINES)
+        if collection.count() == 0:
+            logger.info("Knowledge base not indexed, building now...")
+            indexed = index_knowledge_base(force_rebuild=False)
+            logger.info(f"✓ Knowledge base indexed ({indexed} chunks)")
+        else:
+            logger.info(f"✓ Knowledge base already indexed ({collection.count()} chunks)")
+            
+    except Exception as exc:
+        logger.warning("Startup pre-loading partially failed (non-fatal): %s", exc)
+    
+    logger.info("🚀 Startup optimization complete - ready to serve requests")
 
     # Schedule periodic session cleanup
     async def _cleanup_loop():
@@ -79,3 +112,4 @@ app.include_router(health.router)
 app.include_router(reports.router)
 app.include_router(diet.router)
 app.include_router(tasks.router)
+app.include_router(chat.router)

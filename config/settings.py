@@ -73,6 +73,18 @@ MAX_DIET_GENERATION_RETRIES: int = int(
     os.getenv("MAX_DIET_GENERATION_RETRIES", "2")
 )
 
+CHAT_MODEL: str = os.getenv(
+    "CHAT_MODEL", "llama-3.3-70b-versatile"
+)
+CHAT_MAX_HISTORY_TURNS: int = int(
+    os.getenv("CHAT_MAX_HISTORY_TURNS", "10")
+)
+CHAT_MAX_CONTEXT_CHUNKS: int = int(
+    os.getenv("CHAT_MAX_CONTEXT_CHUNKS", "3")
+)
+
+PUBMED_API_KEY: str = os.getenv("PUBMED_API_KEY", "")
+
 if not GROQ_API_KEY:
     import warnings
     warnings.warn("GROQ_API_KEY is not set.", stacklevel=2)

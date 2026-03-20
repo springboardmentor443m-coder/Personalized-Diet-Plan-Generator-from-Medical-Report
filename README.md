@@ -17,7 +17,7 @@ Analyses patient medical reports (PDF / images), extracts lab data with AI visio
 | Layer | Technology |
 |-------|-----------|
 | Backend | FastAPI, Uvicorn |
-| Frontend | Streamlit |
+| Frontend | React 18 + Vite |
 | LLM Provider | Groq SDK (Llama 4 Scout, Kimi K2, Llama 3.3 70B) |
 | OCR | Vision-model based (no Tesseract) |
 | PDF Rendering | pypdfium2 |
@@ -27,8 +27,22 @@ Analyses patient medical reports (PDF / images), extracts lab data with AI visio
 
 ```
 main.py                          # FastAPI entry-point
-app.py                           # Streamlit frontend
 config/
+
+    ```
+    frontend/
+        src/
+            App.jsx                  # Root component + step state machine
+            api.js                   # Fetch wrappers for backend endpoints
+            index.css                # Global styles
+            components/
+                UploadStep.jsx       # File upload + dietary preferences form
+                ProgressStep.jsx     # Spinner + polling status
+                ResultStep.jsx       # Health summary + diet plan display
+        index.html
+        vite.config.js               # Dev proxy → localhost:8000
+        package.json
+    ```
     settings.py                  # Env-var configuration
 api/
     dependencies.py              # API key dependency
@@ -87,10 +101,12 @@ uvicorn main:app --reload
 
 API docs available at `http://localhost:8000/docs`.
 
-**Streamlit frontend:**
+**React frontend:**
 
 ```bash
-streamlit run app.py
+cd frontend
+npm install      # first time only
+npm run dev      # http://localhost:3000
 ```
 
 ## API Endpoints

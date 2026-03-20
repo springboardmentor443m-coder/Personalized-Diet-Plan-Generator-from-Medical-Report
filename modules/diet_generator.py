@@ -27,7 +27,55 @@ def _is_rate_limit_error(exc: Exception) -> bool:
         return True
     if hasattr(exc, "status_code") and getattr(exc, "status_code", None) == 429:
         return True
+    text = str(exc).lower()
+    if "rate limit" in text or "rate_limit_exceeded" in text:
+        return True
+    if "error code: 429" in text or "status code: 429" in text:
+        return True
     return False
+
+
+def _extract_retry_after_seconds(exc: Exception) -> float | None:
+    """Best-effort parse of provider retry hints like 'Please try again in 35m8.16s'."""
+    text = str(exc).lower()
+    m = re.search(r"try again in\s+([0-9hms.]+)", text)
+    if not m:
+        return None
+
+    token = m.group(1)
+    units = re.findall(r"(\d+(?:\.\d+)?)([hms])", token)
+    if not units:
+        try:
+            return float(token)
+        except ValueError:
+            return None
+
+    total = 0.0
+    for number, unit in units:
+        value = float(number)
+        if unit == "h":
+            total += value * 3600
+        elif unit == "m":
+            total += value * 60
+        elif unit == "s":
+            total += value
+    return total if total > 0 else None
+
+
+def _build_attempt_models() -> list[str]:
+    """Build model attempt order, ensuring fallback is tried within low retry counts."""
+    max_attempts = max(1, MAX_DIET_GENERATION_RETRIES)
+    primary = DIET_GENERATION_MODEL
+    fallback = DIET_GENERATION_MODEL_FALLBACK
+
+    if not fallback or fallback == primary:
+        return [primary] * max_attempts
+
+    plan = [primary, fallback]
+    while len(plan) < max_attempts:
+        # Alternate to spread retries across both models.
+        plan.append(primary if len(plan) % 2 == 0 else fallback)
+    return plan[:max_attempts]
 
 
 def _clean_json_response(text: str) -> str:
@@ -100,17 +148,14 @@ def generate_diet_plan(
     if not GROQ_API_KEY:
         raise ValueError("GROQ_API_KEY is not configured.")
 
-    system_prompt, user_prompt = build_diet_prompt(
+    system_prompt, user_prompt, retrieved_chunks = build_diet_prompt(
         aggregated_state, per_doc_results, dietary_preferences,
     )
 
     client = Groq(api_key=GROQ_API_KEY)
     last_error: Exception | None = None
 
-    models = [DIET_GENERATION_MODEL] * min(2, MAX_DIET_GENERATION_RETRIES) + [
-        DIET_GENERATION_MODEL_FALLBACK
-    ] * max(0, MAX_DIET_GENERATION_RETRIES - 1)
-    models = models[:MAX_DIET_GENERATION_RETRIES] if models else [DIET_GENERATION_MODEL]
+    models = _build_attempt_models()
 
     for attempt, model in enumerate(models, start=1):
         try:
@@ -163,6 +208,7 @@ def generate_diet_plan(
                     "token_usage": usage,
                 },
                 "structural_warnings": structural_warnings,
+                "retrieved_chunks": retrieved_chunks,
             }
 
         except json.JSONDecodeError as exc:
@@ -176,10 +222,25 @@ def generate_diet_plan(
         except Exception as exc:
             last_error = exc
             if _is_rate_limit_error(exc):
+                retry_after = _extract_retry_after_seconds(exc)
+                next_model = models[attempt] if attempt < len(models) else None
+
+                if next_model and next_model != model:
+                    logger.warning(
+                        "Rate-limit hit on attempt %d (model=%s). "
+                        "Switching immediately to fallback model=%s",
+                        attempt,
+                        model,
+                        next_model,
+                    )
+                    continue
+
                 wait = RATE_LIMIT_RETRY_DELAY_SECONDS
+                if retry_after is not None and retry_after > 0:
+                    wait = min(wait, retry_after)
                 logger.warning(
                     "Rate-limit hit on diet generation (attempt %d), "
-                    "waiting %.1fs",
+                    "waiting %.1fs before retry",
                     attempt, wait,
                 )
             else:

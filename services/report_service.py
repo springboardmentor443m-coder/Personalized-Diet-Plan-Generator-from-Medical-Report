@@ -34,6 +34,101 @@ from services.file_service import (
 logger = logging.getLogger(__name__)
 
 
+def _index_session_data(
+    session_id: str,
+    successful_docs: list[dict],
+    aggregated: dict,
+) -> None:
+    """Index OCR text, structured JSON, and patient profile into ChromaDB.
+
+    All data is tagged with session_id for session-scoped retrieval
+    (future chatbot). Non-fatal — failures are logged and swallowed.
+    """
+    try:
+        from modules.knowledge_store import index_patient_session
+    except Exception as exc:
+        logger.warning("ChromaDB patient indexing unavailable: %s", exc)
+        return
+
+    indexed = 0
+
+    # 1. OCR Text Chunks (per document)
+    for doc in successful_docs:
+        ocr_text = doc.get("raw_ocr_text", "")
+        if ocr_text:
+            try:
+                index_patient_session(
+                    session_id=session_id,
+                    data_type="ocr_text",
+                    content=ocr_text,
+                    metadata={
+                        "doc_id": doc.get("doc_id", ""),
+                        "filename": doc.get("original_filename", ""),
+                        "doc_type": doc.get("doc_type", ""),
+                    },
+                )
+                indexed += 1
+            except Exception:
+                pass
+
+    # 2. Complete Structured JSON (per document)
+    for doc in successful_docs:
+        structured = doc.get("structured_json")
+        if structured:
+            import json as _json
+            try:
+                index_patient_session(
+                    session_id=session_id,
+                    data_type="structured_json",
+                    content=_json.dumps(structured, default=str),
+                    metadata={
+                        "doc_id": doc.get("doc_id", ""),
+                        "filename": doc.get("original_filename", ""),
+                        "doc_type": doc.get("doc_type", ""),
+                    },
+                )
+                indexed += 1
+            except Exception:
+                pass
+
+    # 3. Patient Profile (age, weight, height, BMI)
+    patient_info = aggregated.get("patient_information", {})
+    bmi_data = aggregated.get("bmi", {})
+    if patient_info or bmi_data:
+        profile_parts = []
+        if patient_info.get("patient_name"):
+            profile_parts.append(f"Name: {patient_info['patient_name']}")
+        if patient_info.get("age_years"):
+            profile_parts.append(f"Age: {patient_info['age_years']} years")
+        if patient_info.get("gender"):
+            profile_parts.append(f"Gender: {patient_info['gender']}")
+        if bmi_data:
+            profile_parts.append(f"Height: {bmi_data.get('height_cm', 'N/A')} cm")
+            profile_parts.append(f"Weight: {bmi_data.get('weight_kg', 'N/A')} kg")
+            profile_parts.append(f"BMI: {bmi_data.get('bmi_value', 'N/A')} ({bmi_data.get('category', '')})")
+        if profile_parts:
+            try:
+                index_patient_session(
+                    session_id=session_id,
+                    data_type="patient_profile",
+                    content="\n".join(profile_parts),
+                    metadata={
+                        "age": str(patient_info.get("age_years", "")),
+                        "gender": patient_info.get("gender", ""),
+                        "bmi": str(bmi_data.get("bmi_value", "")),
+                    },
+                )
+                indexed += 1
+            except Exception:
+                pass
+
+    if indexed:
+        logger.info(
+            "Session %s: indexed %d item(s) into ChromaDB patient_sessions",
+            session_id, indexed,
+        )
+
+
 class PipelineError(Exception):
     def __init__(self, message: str, status_code: int = 500):
         super().__init__(message)
@@ -263,4 +358,7 @@ async def process_multiple_reports(
         skipped_duplicates, len(output["conflicts"]),
         len(output["chronic_flags"]), elapsed,
     )
+    # Index patient data to ChromaDB for chatbot
+    _index_session_data(session_id, successful, aggregated)
+
     return output

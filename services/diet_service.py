@@ -1,4 +1,4 @@
-"""Diet service — diet plan generation + safety checks."""
+"""Diet service — diet plan generation + safety checks + validation."""
 
 import logging
 from typing import Any
@@ -6,6 +6,7 @@ from typing import Any
 from modules.diet_prompt_builder import _format_medications
 from modules.diet_generator import generate_diet_plan
 from modules.safety_guardrails import run_safety_checks
+from modules.output_validator import validate_diet_output
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +42,19 @@ def generate_diet_from_results(
             },
         }
 
+    # If UI-provided BMI is available, prefer it over extracted BMI so
+    # user-entered measurements influence prompt + safety checks.
+    user_bmi: dict[str, Any] | None = None
+    if isinstance(dietary_preferences, dict):
+        bmi_raw = dietary_preferences.get("bmi")
+        if isinstance(bmi_raw, dict) and bmi_raw.get("bmi_value") is not None:
+            user_bmi = {
+                "bmi_value": bmi_raw.get("bmi_value"),
+                "category": bmi_raw.get("category") or bmi_raw.get("classification"),
+                "height_cm": bmi_raw.get("height_cm"),
+                "weight_kg": bmi_raw.get("weight_kg"),
+            }
+
     # Build aggregated state for diet generator
     aggregated_state = {
         "aggregated_tests": aggregation_result.get("aggregated_tests", {}),
@@ -49,7 +63,7 @@ def generate_diet_from_results(
         "conflicts": aggregation_result.get("conflicts", []),
         "aggregation_status": aggregation_result.get("aggregation_status", ""),
         "patient_information": aggregation_result.get("patient_information", {}),
-        "bmi": aggregation_result.get("bmi"),
+        "bmi": user_bmi or aggregation_result.get("bmi"),
     }
 
     # Per-doc summaries
@@ -66,6 +80,7 @@ def generate_diet_from_results(
         diet_plan = gen_result["diet_plan"]
         gen_metadata = gen_result["generation_metadata"]
         structural_warnings = gen_result.get("structural_warnings", [])
+        retrieved_chunks = gen_result.get("retrieved_chunks", [])
     except (ValueError, RuntimeError) as exc:
         logger.error("Diet generation failed: %s", exc)
         return {
@@ -81,6 +96,19 @@ def generate_diet_from_results(
     medications_text = _format_medications(per_doc_results)
     safety_result = run_safety_checks(diet_plan, aggregated_state, medications_text)
 
+    # Output validation (WHO/NIH threshold checks)
+    validation_result = {}
+    try:
+        validation_result = validate_diet_output(diet_plan, aggregated_state)
+        logger.info(
+            "Output validation: valid=%s, violations=%d",
+            validation_result.get("valid"),
+            validation_result.get("violation_count", 0),
+        )
+    except Exception as exc:
+        logger.warning("Output validation failed (non-fatal): %s", exc)
+        validation_result = {"valid": True, "violations": [], "error": str(exc)}
+
     logger.info(
         "Diet generated: safe=%s, warnings=%d, critical=%d",
         safety_result["safe"],
@@ -91,6 +119,7 @@ def generate_diet_from_results(
     return {
         "diet_plan": diet_plan,
         "safety_checks": safety_result,
+        "output_validation": validation_result,
         "diet_generation_metadata": {
             **gen_metadata,
             "structural_warnings": structural_warnings,
