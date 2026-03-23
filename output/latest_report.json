@@ -1,0 +1,170 @@
+{
+  "patient_data": {
+    "full_name": "Mr. RAVI KUMAR",
+    "age_value": 36,
+    "gender": "Male",
+    "patient_id": "MD109742",
+    "report_date": "05/11/2018 01:44 PM",
+    "collection_date": "04/11/2018 12:31 PM",
+    "facility": "Magnus Diagnostic Centre",
+    "referring_doctor": "DR. DR. SELF"
+  },
+  "lab_results": {
+    "haemoglobin": {
+      "test_name": "Haemoglobin",
+      "value": 11.0,
+      "unit": "g/dL",
+      "reference_range": "13.0-18.0",
+      "flag": "low",
+      "category": "hematology"
+    },
+    "creatinine_24_hrs_urine": {
+      "test_name": "Creatinine - 24 Hrs. Urine",
+      "value": 675,
+      "unit": "mg/24 hrs",
+      "reference_range": null,
+      "flag": null,
+      "category": "renal_function"
+    },
+    "blood_urea": {
+      "test_name": "Blood Urea",
+      "value": 50,
+      "unit": "mg/dL",
+      "reference_range": "10-50",
+      "flag": "normal",
+      "category": "biochemistry"
+    },
+    "creatinine_serum": {
+      "test_name": "Creatinine, Serum",
+      "value": 3.0,
+      "unit": "mg/dL",
+      "reference_range": "0.6-1.3",
+      "flag": "high",
+      "category": "renal_function"
+    },
+    "urine_protein_24_hrs": {
+      "test_name": "URINE PROTEIN - Urine",
+      "value": 3133.5,
+      "unit": "mg/24 hr",
+      "reference_range": "< 150",
+      "flag": "high",
+      "category": "renal_function"
+    },
+    "urine_protein_spot": {
+      "test_name": "urine Protein (Spot urine)",
+      "value": 208.9,
+      "unit": "mg/L",
+      "reference_range": "0-150",
+      "flag": "high",
+      "category": "renal_function"
+    },
+    "urine_volume_24_hrs": {
+      "test_name": "Urine Volume in 24 hours",
+      "value": 1500,
+      "unit": "ml",
+      "reference_range": null,
+      "flag": null,
+      "category": "renal_function"
+    },
+    "sodium_serum": {
+      "test_name": "SODIUM, Serum",
+      "value": 137,
+      "unit": "mmol/L",
+      "reference_range": "135-155",
+      "flag": "normal",
+      "category": "electrolytes"
+    },
+    "potassium_serum": {
+      "test_name": "Potassium, serum",
+      "value": 4.0,
+      "unit": "mmol/L",
+      "reference_range": "3.5-5.5",
+      "flag": "normal",
+      "category": "electrolytes"
+    },
+    "chloride_serum": {
+      "test_name": "Chloride",
+      "value": 105,
+      "unit": "mmol/L",
+      "reference_range": "97-110",
+      "flag": "normal",
+      "category": "electrolytes"
+    }
+  },
+  "test_categories": {
+    "hematology": [
+      "haemoglobin"
+    ],
+    "biochemistry": [
+      "blood_urea"
+    ],
+    "renal_function": [
+      "creatinine_24_hrs_urine",
+      "creatinine_serum",
+      "urine_protein_24_hrs",
+      "urine_protein_spot",
+      "urine_volume_24_hrs"
+    ],
+    "electrolytes": [
+      "sodium_serum",
+      "potassium_serum",
+      "chloride_serum"
+    ],
+    "hormones": [],
+    "lipid_profile": [],
+    "diabetes_panel": [],
+    "hepatic_function": [],
+    "other_tests": []
+  },
+  "abnormal_results": [
+    {
+      "test_key": "haemoglobin",
+      "measured_value": 11.0,
+      "normal_interval": "13.0-18.0",
+      "severity": "mild"
+    },
+    {
+      "test_key": "creatinine_serum",
+      "measured_value": 3.0,
+      "normal_interval": "0.6-1.3",
+      "severity": "moderate"
+    },
+    {
+      "test_key": "urine_protein_24_hrs",
+      "measured_value": 3133.5,
+      "normal_interval": "< 150",
+      "severity": "severe"
+    },
+    {
+      "test_key": "urine_protein_spot",
+      "measured_value": 208.9,
+      "normal_interval": "0-150",
+      "severity": "moderate"
+    }
+  ],
+  "clinical_notes": {
+    "doctor_comments": [
+      "Kindly correlate clinically. If necessary discuss/repeat"
+    ],
+    "interpretations": [],
+    "recommendations": [],
+    "disclaimers": []
+  },
+  "processing_info": {
+    "total_pages": 3,
+    "processed_pages": [
+      1,
+      2,
+      3
+    ],
+    "extraction_timestamp": "2024-03-16T14:30:00",
+    "document_type": "lab_report"
+  },
+  "_metadata": {
+    "source_file": "420437986-Report-MK36202-RAVI-KUMAR-04Nov2018-122520.pdf",
+    "total_pages": 3,
+    "processed_pages": 3,
+    "extraction_timestamp": "2026-03-23T17:45:31.813971",
+    "processor_version": "AI-NutriCare v1.0"
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "patient_profile": {
+    "name": "Mr. RAVI KUMAR",
+    "age": 36,
+    "gender": "Male",
+    "bmi": 24.2,
+    "bmi_category": "Normal",
+    "diet_type": "Vegetarian",
+    "primary_concerns": [
+      "Low Haemoglobin",
+      "High Creatinine Serum",
+      "High Urine Protein"
+    ]
+  },
+  "nutrient_targets": {
+    "daily_calories": 2000,
+    "protein_g": 100,
+    "carbs_g": 250,
+    "fats_g": 70,
+    "fiber_g": 30,
+    "water_liters": 3,
+    "notes": "Increase iron intake to improve haemoglobin levels, reduce protein intake to manage kidney function"
+  },
+  "weekly_meal_plan": {
+    "monday": {
+      "breakfast": "Oatmeal with fruits and nuts",
+      "mid_morning": "Coconut water",
+      "lunch": "Brown rice, mixed vegetable sabzi, and dal",
+      "evening_snack": "Roasted chana",
+      "dinner": "Quinoa, palak paneer, and mixed vegetable salad",
+      "bedtime": "Warm milk with turmeric"
+    },
+    "tuesday": {
+      "breakfast": "Idli with sambar and coconut chutney",
+      "mid_morning": "Fresh lime water",
+      "lunch": "Whole wheat roti, mixed vegetable sabzi, and rajma masala",
+      "evening_snack": "Cucumber and tomato slices with hummus",
+      "dinner": "Brown rice, mixed lentil soup, and saut\u00e9ed spinach",
+      "bedtime": "Herbal tea"
+    },
+    "wednesday": {
+      "breakfast": "Poha with vegetables and nuts",
+      "mid_morning": "Fresh fruit salad",
+      "lunch": "Whole wheat roti, mixed vegetable sabzi, and chana masala",
+      "evening_snack": "Carrot and celery sticks with guacamole",
+      "dinner": "Quinoa, mixed vegetable stir-fry, and dal",
+      "bedtime": "Warm milk with cardamom"
+    },
+    "thursday": {
+      "breakfast": "Upma with vegetables and nuts",
+      "mid_morning": "Coconut water",
+      "lunch": "Brown rice, mixed vegetable sabzi, and kidney bean salad",
+      "evening_snack": "Roasted makhana",
+      "dinner": "Whole wheat roti, mixed vegetable sabzi, and baingan bharta",
+      "bedtime": "Herbal tea"
+    },
+    "friday": {
+      "breakfast": "Idli with sambar and coconut chutney",
+      "mid_morning": "Fresh lime water",
+      "lunch": "Quinoa, mixed vegetable salad, and dal",
+      "evening_snack": "Cucumber and tomato slices with hummus",
+      "dinner": "Brown rice, mixed lentil soup, and saut\u00e9ed broccoli",
+      "bedtime": "Warm milk with turmeric"
+    },
+    "saturday": {
+      "breakfast": "Poha with vegetables and nuts",
+      "mid_morning": "Fresh fruit salad",
+      "lunch": "Whole wheat roti, mixed vegetable sabzi, and rajma masala",
+      "evening_snack": "Carrot and celery sticks with guacamole",
+      "dinner": "Quinoa, mixed vegetable stir-fry, and dal",
+      "bedtime": "Herbal tea"
+    },
+    "sunday": {
+      "breakfast": "Upma with vegetables and nuts",
+      "mid_morning": "Coconut water",
+      "lunch": "Brown rice, mixed vegetable sabzi, and kidney bean salad",
+      "evening_snack": "Roasted chana",
+      "dinner": "Whole wheat roti, mixed vegetable sabzi, and baingan bharta",
+      "bedtime": "Warm milk with cardamom"
+    }
+  },
+  "supplements": [
+    {
+      "name": "Iron supplement",
+      "dosage": "1 tablet per day",
+      "reason": "To improve haemoglobin levels",
+      "indian_brand": "Patanjali"
+    }
+  ],
+  "zero_sugar_products": [
+    {
+      "product_name": "Sugar-free yogurt",
+      "brand": "Amul",
+      "category": "Dairy",
+      "why_recommended": "To manage calorie intake and reduce sugar consumption"
+    }
+  ],
+  "indian_brand_suggestions": [
+    {
+      "product": "Brown rice",
+      "brand": "Tata",
+      "available_at": "Local grocery stores",
+      "benefit": "Rich in fiber and nutrients"
+    }
+  ],
+  "hydration_detox_plan": {
+    "morning_ritual": "Drink 1 liter of water with lemon and honey",
+    "during_meals": "Drink 1 glass of water with each meal",
+    "post_workout": "Drink 1 liter of coconut water",
+    "evening": "Drink 1 glass of warm water with turmeric",
+    "detox_drinks": [
+      "Coconut water",
+      "Fresh lime water",
+      "Herbal tea"
+    ],
+    "foods_for_detox": [
+      "Leafy greens",
+      "Cruciferous vegetables",
+      "Berries"
+    ],
+    "weekly_detox_day": "Sunday"
+  },
+  "_metadata": {
+    "generated_at": "2026-03-23T17:45:34.462894",
+    "bmi": 24.2,
+    "bmi_category": "Normal",
+    "source_file": "420437986-Report-MK36202-RAVI-KUMAR-04Nov2018-122520.pdf"
+  }
+}
