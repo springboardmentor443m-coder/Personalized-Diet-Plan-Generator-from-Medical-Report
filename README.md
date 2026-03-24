@@ -7,9 +7,8 @@ AI-NutriCare/
 │   └── index.html         # Professional Flask HTML/CSS/JS frontend
 ├── static/                    # Auto-generated charts (BMI, health metrics, risk analysis)
 ├── uploads/                    # Temporary uploaded report files
-│-report_parser.py    # OCR + LLM-based lab report extraction
-│   └── diet_generator/
-│       └── diet_planner.py      # AI diet plan generation using Groq LLM
+├──report_parser.py    # OCR + LLM-based lab report extractio
+├──diet_planner.py      # AI diet plan generation using Groq LLM
 ├── models/                      # Trained ML models
 ├── output/                      # Generated diet plans (PDF/JSON)
 ├── app.py                       # Flask web application (tabbed UI)
