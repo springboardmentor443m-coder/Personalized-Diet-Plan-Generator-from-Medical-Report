@@ -4,12 +4,10 @@ An intelligent healthcare system that extracts information from medical lab repo
 ```
 AI-NutriCare/
 ├── templates/
-│   └── dashboard.html         # Professional Flask HTML/CSS/JS frontend
+│   └── index.html         # Professional Flask HTML/CSS/JS frontend
 ├── static/                    # Auto-generated charts (BMI, health metrics, risk analysis)
 ├── uploads/                    # Temporary uploaded report files
-├── src/
-│   ├── extraction/
-│   │   └── report_parser.py    # OCR + LLM-based lab report extraction
+│-report_parser.py    # OCR + LLM-based lab report extraction
 │   └── diet_generator/
 │       └── diet_planner.py      # AI diet plan generation using Groq LLM
 ├── models/                      # Trained ML models
