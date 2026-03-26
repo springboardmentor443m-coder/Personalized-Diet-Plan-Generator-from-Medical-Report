@@ -2,7 +2,7 @@
 
 
 
-It is a full-stack health-tech application that transforms complex medical lab reports (PDFs/Images) into actionable health insights. By combining \*\*OCR (Optical Character Recognition)\*\* with \*\*Large Language Models (LLMs)\*\*, the app provides a personalized nutrition strategy and an interactive medical consultant based on a user's unique biomarkers.
+A full-stack health-tech application that transforms complex medical lab reports (PDFs/Images) into actionable health insights. By combining \*\*OCR (Optical Character Recognition)\*\* with \*\*Large Language Models (LLMs)\*\*, the app provides personalized nutrition strategies and an interactive medical assistant based on user biomarkers.
 
 
 
@@ -14,17 +14,39 @@ It is a full-stack health-tech application that transforms complex medical lab r
 
 
 
-\* \*\*⚡ Smart Report Parsing:\*\* Upload blood work in PDF, JPG, or PNG format. The AI automatically extracts and categorizes medical markers.
+\* ⚡ \*\*Smart Report Parsing\*\*
 
-\* \*\*📊 Health Dashboard:\*\* A clean, wide-screen interface showing BMI, critical abnormalities, and clinical lab notes at a glance.
+&#x20; Upload blood reports (PDF, JPG, PNG). AI automatically extracts and structures medical markers.
 
-\* \*\*🥗 Dynamic Nutrition Strategy:\*\* Generates a personalized meal plan in an appealing card-based grid layout, specifically addressing detected deficiencies (e.g., Anaemia, High Cholesterol).
 
-\* \*\*💬 Interactive AI Consultant:\*\* A ChatGPT-style interface with a professional medical greeting and \*\*Dynamic FAQs\*\* that change based on your specific report results.
 
-\* \*\*📥 Professional PDF Export:\*\* One-click download of your generated nutrition plan for offline use or sharing with a doctor.
+\* 📊 \*\*Health Dashboard\*\*
 
-\* \*\*⏳ Real-time Progress:\*\* A multi-step loading bar that keeps the user informed during the heavy lifting of AI analysis.
+&#x20; Clean interface displaying BMI, abnormalities, and clinical insights.
+
+
+
+\* 🥗 \*\*Dynamic Nutrition Strategy\*\*
+
+&#x20; Generates personalized diet plans based on detected deficiencies (e.g., anemia, cholesterol).
+
+
+
+\* 💬 \*\*Interactive AI Consultant\*\*
+
+&#x20; Chat interface with context-aware responses and dynamic FAQs based on your report.
+
+
+
+\* 📥 \*\*Export Diet Plan\*\*
+
+&#x20; Download generated diet plans for offline use or doctor consultation.
+
+
+
+\* ⏳ \*\*Real-time Progress Feedback\*\*
+
+&#x20; User-friendly progress indicators during AI processing.
 
 
 
@@ -36,15 +58,17 @@ It is a full-stack health-tech application that transforms complex medical lab r
 
 
 
-\*\*Frontend:\*\* Streamlit, CSS3 (Custom Glassmorphism/Stone UI)  
+\*\*Frontend:\*\* Streamlit
 
-\*\*Backend:\*\* FastAPI / Python  
+\*\*Backend:\*\* FastAPI (Python)
 
-\*\*AI/ML:\*\* LLM Integration (OpenAI/Gemini), OCR Engine  
+\*\*AI/ML:\*\* LLM Integration (Groq / OpenAI / Gemini), OCR
 
-\*\*PDF Generation:\*\* FPDF (Legacy Support)  
+\*\*Data Handling:\*\* Pandas, JSON, Regex
 
-\*\*Data Handling:\*\* Pandas, JSON, Regex  
+\*\*Vector DB:\*\* ChromaDB
+
+\*\*Other Tools:\*\* dotenv, requests
 
 
 
@@ -56,85 +80,211 @@ It is a full-stack health-tech application that transforms complex medical lab r
 
 
 
-\### 1. Clone the Repository
+\### 1️⃣ Clone the Repository
+
+
 
 ```bash
 
-git clone \[https://github.com/your-username/ai-for-health.git](https://github.com/your-username/ai-for-health.git)
+git clone https://github.com/your-username/ai-for-health.git
 
 cd ai-for-health
 
-2\. Set Up Virtual Environment
+```
 
-Bash
+
+
+\---
+
+
+
+\### 2️⃣ Create Virtual Environment
+
+
+
+```bash
 
 python -m venv venv
 
-\# On Windows:
+```
 
-source venv/Scripts/activate
 
-\# On Mac/Linux:
+
+\#### Activate environment:
+
+
+
+\*\*Windows\*\*
+
+
+
+```bash
+
+venv\\Scripts\\activate
+
+```
+
+
+
+\*\*Mac/Linux\*\*
+
+
+
+```bash
 
 source venv/bin/activate
 
-3\. Install Dependencies
+```
 
-Bash
+
+
+\---
+
+
+
+\### 3️⃣ Install Dependencies
+
+
+
+```bash
 
 pip install -r requirements.txt
 
-4\. Configuration
-
-Create a .env file in the root directory and add your API keys:
+```
 
 
 
-Code snippet
+\---
 
-API\_KEY=your\_llm\_api\_key\_here
+
+
+\### 4️⃣ Configure Environment Variables
+
+
+
+Create a `.env` file in the root directory:
+
+
+
+```env
+
+GROQ\_API\_KEY=your\_api\_key\_here
 
 BACKEND\_URL=http://localhost:8000
 
-5\. Run the Application
-
-You will need two terminals (one for backend, one for frontend):
+```
 
 
 
-Terminal 1 (Backend):
+\---
 
 
 
-Bash
+\### 5️⃣ Run the Application
+
+
+
+\#### 🔹 Terminal 1 — Backend
+
+
+
+```bash
 
 cd backend
 
 uvicorn main:app --reload
 
-Terminal 2 (Frontend):
+```
 
 
 
-Bash
+\#### 🔹 Terminal 2 — Frontend
+
+
+
+```bash
 
 cd frontend
 
 streamlit run app.py
 
-🎨 User Interface Preview
-
-Home: Minimalist centered landing page for profile input and file upload.
-
-Dashboard: Wide-view metrics and critical marker alerts.
-
-Nutrition: Grid-style cards separating meals and dietary goals.
-
-Chat: Pinned input bar with report-specific "Quick Prompt" buttons.
+```
 
 
 
-⚖️ Disclaimer
+\---
 
-This application is an AI-powered tool intended for educational and informational purposes only. It is not a substitute for professional medical advice, diagnosis, or treatment. Always seek the advice of your physician or other qualified health provider with any questions you may have regarding a medical condition.
+
+
+\## 🎨 Application Flow
+
+
+
+1\. Upload medical report
+
+2\. OCR extracts text
+
+3\. AI processes medical data
+
+4\. Structured insights generated
+
+5\. Personalized diet plan created
+
+6\. Chat assistant uses RAG for context-aware responses
+
+
+
+\---
+
+
+
+\## 📸 UI Overview
+
+
+
+\* \*\*Home:\*\* Upload report + enter details
+
+\* \*\*Dashboard:\*\* Health metrics \& abnormalities
+
+\* \*\*Diet Plan:\*\* Personalized recommendations
+
+\* \*\*Chat:\*\* Ask questions about your report
+
+
+
+\---
+
+
+
+\## ⚖️ Disclaimer
+
+
+
+This application is intended for \*\*educational and informational purposes only\*\*.
+
+It is \*\*not a substitute for professional medical advice, diagnosis, or treatment\*\*.
+
+
+
+Always consult a qualified healthcare provider for medical concerns.
+
+
+
+\---
+
+
+
+\## 👩‍💻 Author
+
+
+
+\*\*Adhya Prashanth\*\*
+
+AI Internship Project
+
+
+
+\---
+
+
 
