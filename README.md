@@ -101,7 +101,7 @@ Integrate database (PostgreSQL / MongoDB)
 Deploy on cloud (AWS / Render)
 Improve recommendation accuracy
 Add user health tracking dashboard
-📌 Note
 
+📌 Note
 This project is intended for learning and demonstration purposes.
 Further improvements can be made to enhance scalability and real-world usag
