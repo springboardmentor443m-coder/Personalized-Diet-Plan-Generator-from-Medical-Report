@@ -1,75 +1,92 @@
-Diet-planner-app/
+# 🥗 AI Diet Recommendation System
+
+This project was developed as part of an internship program.  
+It is an AI-powered application that helps users generate personalized diet plans based on extracted health data.
+
+The system uses OCR and AI models to analyze input data and provide intelligent diet recommendations along with chatbot support.
+
+---
+
+## 🚀 Features
+
+- 📄 Extracts health data using OCR
+- 🧠 Generates personalized diet plans using AI
+- 💬 Chatbot support using RAG (Retrieval-Augmented Generation)
+- ⚡ FastAPI backend for processing
+- 🎯 Streamlit-based interactive UI
+
+---
+
+## 📁 Project Structure
+AI-Diet-Recommendation-System/
 ├── backend/
-│   ├── __init__.py
-│   ├── config.py         # Configuration & Model settings
-│   ├── main.py           # FastAPI server entry point
-│   ├── ocr.py            # Llama Vision OCR logic
-│   ├── extraction.py     # Structured Data Extraction logic
-│   ├── diet_generator.py # Diet Plan Generation logic
-│   ├── rag_chat.py       # RAG (Vector DB) logic
-│   └── rag_chat_1.py     # Updated RAG (Vector DB) logic
+│ ├── init.py
+│ ├── config.py # Configuration & model settings
+│ ├── main.py # FastAPI entry point
+│ ├── ocr.py # OCR processing logic
+│ ├── extraction.py # Data extraction logic
+│ ├── diet_generator.py # Diet plan generation
+│ └── rag_chat.py # RAG chatbot logic
 ├── frontend/
-│   ├── app.py            # Streamlit UI
-│   └── app2.py           # Updated streamlit UI
-├── .env                  # API Keys (Create this file if not exists!)
-├── requirements.txt      # Dependency list
-└── README.md             # This file
+│ └── app.py # Streamlit UI
+├── .env.example # Environment variables template
+├── requirements.txt # Dependencies
+└── README.md # Documentation
 
-## 🛠️ Quick Start Guide
 
-### 1. Setup Environment (Using uv)
+---
 
-We recommend using `uv` for extremely fast setup.
+## 🛠️ Setup Instructions
 
-### steps to do in terminal after opening the folder in ide
+### 1. Create Virtual Environment
 
-**Install uv (if not installed):**
+**Using uv (recommended):**
 ```bash
 pip install uv
-```
-
-**Create & Activate Virtual Environment:**
-```bash
-# Windows
 uv venv
 
+Activate environment:
+
+Windows:
 .venv\Scripts\activate
-
-# Mac/Linux
-uv venv
-
+Mac/Linux:
 source .venv/bin/activate
-```
 
-**Install Dependencies:**
-```bash
+ 2. Install Dependencies
 uv pip install -r requirements.txt
-```
+Alternative:
+pip install -r requirements.txt
 
-> **Alternative:** If you prefer standard pip, run `python -m venv venv`, activate it, and run `pip install -r requirements.txt`
+3. Configure Environment Variables
 
-### 2. Configure API Keys
+Create a .env file in the root directory and add your API key:
+GROQ_API_KEY=your_api_key_here
 
-In the file named `.env` in the root folder and add your Groq API Key:
-```env
-GROQ_API_KEY=gsk_yoursupersecretkeyhere...
-```
+▶️ Running the Application
 
-### 3. Running the Application
-
-You need to open **two separate terminals** (make sure the virtual environment is activated in both).
-
-**Terminal 1: Start Backend (API)**
-```bash
+Open two terminals and activate the environment in both.
+🔹 Start Backend Server
 uvicorn backend.main:app --reload
-```
-✅ **Success:** You should see `Application startup complete.` running at `http://127.0.0.1:8000`
 
-**Terminal 2: Start Frontend (UI)**
-```bash
+Backend will run at:
+http://127.0.0.1:8000
+
+🔹 Start Frontend UI
 streamlit run frontend/app.py
-```
-✅ **Success:** A browser window will open automatically at `http://localhost:8501`
+http://localhost:8501
 
+👩‍💻 Author
 
+Kratika Shukla
 
+🔮 Future Improvements
+Add user authentication
+Integrate database (PostgreSQL / MongoDB)
+Deploy on cloud (AWS / Render)
+Improve recommendation accuracy
+Add user health tracking dashboard
+
+📌 Note
+
+This project is intended for learning and demonstration purposes.
+Further improvements can be made to enhance scalability and real-world usage.
