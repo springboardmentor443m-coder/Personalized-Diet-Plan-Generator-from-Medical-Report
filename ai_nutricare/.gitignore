@@ -1,0 +1,25 @@
+# Environment
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Temp uploads
+temp_upload/
+
+# VS Code
+.vscode/
+
+# Jupyter
+*.ipynb_checkpoints/
+exp_diet.ipynb
+
+# OS
+.DS_Store
+Thumbs.db
