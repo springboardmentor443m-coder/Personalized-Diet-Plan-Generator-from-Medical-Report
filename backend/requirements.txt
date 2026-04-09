@@ -1,0 +1,13 @@
+pandas
+numpy
+scikit-learn
+xgboost
+streamlit
+joblib
+matplotlib
+seaborn
+plotly
+pillow
+# Optional: For OCR if you install Tesseract Engine locally
+pytesseract
+pdf2image
